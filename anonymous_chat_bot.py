@@ -573,15 +573,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     # Main navigation
     elif data == 'find_partner':
-        # Convert callback query to update for find_partner handler
-        fake_update = Update(update_id=update.update_id, message=query.message)
-        fake_update.effective_user = query.from_user
-        await handle_find_partner(fake_update, context)
+        await handle_find_partner_callback(query, context)
     
     elif data == 'view_profile':
-        fake_update = Update(update_id=update.update_id, message=query.message)
-        fake_update.effective_user = query.from_user
-        await show_profile(fake_update, context)
+        await show_profile_callback(query, context)
     
     elif data == 'help_menu':
         await query.edit_message_text(
@@ -609,19 +604,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     # Chat controls
     elif data == 'skip_chat':
-        fake_update = Update(update_id=update.update_id, message=query.message)
-        fake_update.effective_user = query.from_user
-        await handle_skip_chat(fake_update, context)
+        await handle_skip_chat_callback(query, context)
     
     elif data == 'end_chat':
-        fake_update = Update(update_id=update.update_id, message=query.message)
-        fake_update.effective_user = query.from_user
-        await handle_end_chat(fake_update, context)
+        await handle_end_chat_callback(query, context)
     
     elif data == 'report_user':
-        fake_update = Update(update_id=update.update_id, message=query.message)
-        fake_update.effective_user = query.from_user
-        await handle_report_user(fake_update, context)
+        await handle_report_user_callback(query, context)
     
     # Admin panel
     elif data.startswith('admin_') and is_admin(user_id):
@@ -659,6 +648,120 @@ async def handle_gender_selection(query, context: ContextTypes.DEFAULT_TYPE) -> 
             reply_markup=Keyboards.main_menu(),
             parse_mode='Markdown'
         )
+
+# Button Callback Functions
+async def handle_find_partner_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle find partner button callback"""
+    user_id = query.from_user.id
+    
+    with database.get_db() as db:
+        user = database.get_user(db, user_id)
+        if not user:
+            await query.edit_message_text("❌ Please register first using /start")
+            return
+        
+        if user.is_banned:
+            await query.edit_message_text("❌ Your account is suspended.")
+            return
+    
+    if matchmaking.get_partner(user_id):
+        await query.edit_message_text(Messages.ALREADY_IN_CHAT, reply_markup=Keyboards.chat_controls())
+        return
+    
+    if user_id in matchmaking.waiting_users:
+        await query.edit_message_text(Messages.ALREADY_WAITING)
+        return
+    
+    if await matchmaking.add_to_queue(user_id):
+        await query.edit_message_text(Messages.MATCHING_STARTED)
+        # Start matching with retry in background
+        task = asyncio.create_task(matchmaking.start_matching_with_retry(user_id, context))
+        matchmaking.retry_tasks[user_id] = task
+    else:
+        await query.edit_message_text("❌ Unable to start matching. Please try again.")
+
+async def show_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle view profile button callback"""
+    user_id = query.from_user.id
+    
+    with database.get_db() as db:
+        user = database.get_user(db, user_id)
+        if not user:
+            await query.edit_message_text("❌ Please register first using /start")
+            return
+        
+        interests = ", ".join([interest.name for interest in user.interests]) if user.interests else "None set"
+        created_date = user.created_at.strftime("%B %d, %Y")
+        
+        profile_text = Messages.PROFILE_INFO.format(
+            user.nickname,
+            user.gender.title(),
+            user.bio or "Not set",
+            user.age or "Not set",
+            user.location or "Not set",
+            interests,
+            user.total_chats,
+            created_date
+        )
+        
+        await query.edit_message_text(
+            profile_text, 
+            reply_markup=Keyboards.profile_menu(),
+            parse_mode='Markdown'
+        )
+
+async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle skip chat button callback"""
+    user_id = query.from_user.id
+    partner_id = await matchmaking.end_chat(user_id)
+    
+    if partner_id:
+        await query.edit_message_text(Messages.SKIPPED_CHAT)
+        await context.bot.send_message(partner_id, Messages.PARTNER_SKIPPED, reply_markup=Keyboards.main_menu())
+        
+        # Start new search for current user - Add them back to queue
+        if await matchmaking.add_to_queue(user_id):
+            await context.bot.send_message(user_id, Messages.MATCHING_STARTED)
+            task = asyncio.create_task(matchmaking.start_matching_with_retry(user_id, context))
+            matchmaking.retry_tasks[user_id] = task
+    else:
+        await query.edit_message_text(Messages.NOT_IN_CHAT, reply_markup=Keyboards.main_menu())
+
+async def handle_end_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle end chat button callback"""
+    user_id = query.from_user.id
+    partner_id = await matchmaking.end_chat(user_id)
+    await matchmaking.remove_from_queue(user_id)
+    
+    if partner_id:
+        await query.edit_message_text(Messages.CHAT_ENDED, reply_markup=Keyboards.main_menu())
+        await context.bot.send_message(partner_id, Messages.CHAT_ENDED_BY_PARTNER, reply_markup=Keyboards.main_menu())
+    else:
+        await query.edit_message_text(Messages.CHAT_ENDED, reply_markup=Keyboards.main_menu())
+
+async def handle_report_user_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle report user button callback"""
+    user_id = query.from_user.id
+    partner_id = matchmaking.get_partner(user_id)
+    
+    if not partner_id:
+        await query.edit_message_text(Messages.REPORT_ONLY_IN_CHAT)
+        return
+    
+    with database.get_db() as db:
+        session = database.get_active_chat_session(db, user_id)
+        database.create_user_report(
+            db, user_id, partner_id, 
+            session.id if session else None,
+            "Reported via bot command"
+        )
+    
+    # End the chat
+    await matchmaking.end_chat(user_id)
+    await query.edit_message_text(Messages.REPORT_SENT, reply_markup=Keyboards.main_menu())
+    
+    if partner_id:
+        await context.bot.send_message(partner_id, Messages.CHAT_ENDED_BY_PARTNER, reply_markup=Keyboards.main_menu())
 
 # Admin Functions
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

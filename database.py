@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Set
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -23,14 +23,14 @@ Base = declarative_base()
 user_interests = Table(
     'user_interests',
     Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.user_id'), primary_key=True),
+    Column('user_id', BigInteger, ForeignKey('users.user_id'), primary_key=True),
     Column('interest_name', String(100), ForeignKey('interests.name'), primary_key=True)
 )
 
 class User(Base):
     __tablename__ = 'users'
     
-    user_id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, primary_key=True)
     username = Column(String(255), nullable=True)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
@@ -47,7 +47,7 @@ class User(Base):
     is_banned = Column(Boolean, default=False)
     ban_reason = Column(Text, nullable=True)
     ban_date = Column(DateTime, nullable=True)
-    banned_by = Column(Integer, nullable=True)  # Admin user_id who banned
+    banned_by = Column(BigInteger, nullable=True)  # Admin user_id who banned
 
 class Interest(Base):
     __tablename__ = 'interests'
@@ -60,11 +60,11 @@ class ChatSession(Base):
     __tablename__ = 'chat_sessions'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_a_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
-    user_b_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
+    user_a_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    user_b_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
     started_at = Column(DateTime, default=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
-    ended_by = Column(Integer, nullable=True)  # user_id who ended the session
+    ended_by = Column(BigInteger, nullable=True)  # user_id who ended the session
     is_active = Column(Boolean, default=True)
     report_count = Column(Integer, default=0)
     
@@ -75,9 +75,9 @@ class AdminAction(Base):
     __tablename__ = 'admin_actions'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    admin_id = Column(Integer, nullable=False)  # Admin user_id
+    admin_id = Column(BigInteger, nullable=False)  # Admin user_id
     action_type = Column(String(50), nullable=False)  # 'ban', 'unban', 'broadcast'
-    target_user_id = Column(Integer, nullable=True)  # For ban/unban actions
+    target_user_id = Column(BigInteger, nullable=True)  # For ban/unban actions
     reason = Column(Text, nullable=True)
     broadcast_message = Column(Text, nullable=True)  # For broadcast actions
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -86,13 +86,13 @@ class UserReport(Base):
     __tablename__ = 'user_reports'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    reporter_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
-    reported_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
+    reporter_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    reported_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
     chat_session_id = Column(Integer, ForeignKey('chat_sessions.id'), nullable=True)
     reason = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     reviewed = Column(Boolean, default=False)
-    reviewed_by = Column(Integer, nullable=True)  # Admin user_id
+    reviewed_by = Column(BigInteger, nullable=True)  # Admin user_id
     reviewed_at = Column(DateTime, nullable=True)
     
     reporter = relationship("User", foreign_keys=[reporter_id])
@@ -103,7 +103,7 @@ class BroadcastMessage(Base):
     __tablename__ = 'broadcast_messages'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    admin_id = Column(Integer, nullable=False)
+    admin_id = Column(BigInteger, nullable=False)
     message = Column(Text, nullable=False)
     sent_count = Column(Integer, default=0)
     failed_count = Column(Integer, default=0)

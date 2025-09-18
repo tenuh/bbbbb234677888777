@@ -932,7 +932,8 @@ def main() -> None:
             BotCommand("stop", "End current chat"),
             BotCommand("profile", "View/edit your profile"),
             BotCommand("help", "Show help menu"),
-            BotCommand("privacy", "Privacy information")
+            BotCommand("privacy", "Privacy information"),
+            BotCommand("admin", "Admin panel (admin only)")
         ]
         await application.bot.set_my_commands(commands)
     

@@ -1,6 +1,6 @@
-python-telegram-bot==20.7
+python-telegram-bot[job-queue]==20.7
 psycopg2-binary
 python-dotenv
-sqlalchemy
-alembic
+sqlalchemy==2.0.43
+alembic==1.16.5
 telegram

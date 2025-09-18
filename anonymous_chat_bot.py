@@ -795,7 +795,7 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Set bot commands
-    async def set_commands(application):
+    async def set_commands():
         commands = [
             BotCommand("start", "Start the bot and register"),
             BotCommand("find", "Find a chat partner"),
@@ -807,7 +807,17 @@ def main() -> None:
         ]
         await application.bot.set_my_commands(commands)
     
-    application.job_queue.run_once(set_commands, 0)
+    # Set commands when bot starts
+    async def startup():
+        await set_commands()
+    
+    if application.job_queue:
+        application.job_queue.run_once(lambda context: asyncio.create_task(startup()), 0)
+    else:
+        # If no job queue, set commands directly when starting
+        async def post_init(application):
+            await startup()
+        application.post_init = post_init
     
     # Start polling
     logger.info("Bot started successfully")

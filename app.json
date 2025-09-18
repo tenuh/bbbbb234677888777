@@ -1,0 +1,39 @@
+{
+  "name": "Telegram Anonymous Chat Bot",
+  "description": "An anonymous chat bot for Telegram with database persistence and admin controls",
+  "repository": "https://github.com/yourusername/anonymous-chat-bot",
+  "logo": "https://telegra.ph/file/b2b55c96e7b9a0a0f4b1a.png",
+  "keywords": ["telegram", "bot", "chat", "anonymous", "python"],
+  "stack": "heroku-22",
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ],
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0",
+      "as": "DATABASE"
+    }
+  ],
+  "env": {
+    "TELEGRAM_BOT_TOKEN": {
+      "description": "Your Telegram Bot Token from @BotFather",
+      "required": true,
+      "value": ""
+    },
+    "DATABASE_URL": {
+      "description": "PostgreSQL database URL (automatically provided by Heroku Postgres addon)",
+      "required": false
+    }
+  },
+  "scripts": {
+    "postdeploy": "python -c \"import database; database.init_database()\""
+  }
+}

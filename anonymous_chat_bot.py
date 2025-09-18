@@ -1,4 +1,5 @@
 import logging
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -15,7 +16,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
 )
 
-TOKEN = '8436060773:AAE2_ofNTrMKokeoc4w48afDdq9AmQjnnRA'
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8436060773:AAE2_ofNTrMKokeoc4w48afDdq9AmQjnnRA')
 
 user_data = {}
 waiting_users = {'male': [], 'female': []}

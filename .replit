@@ -21,6 +21,7 @@ args = "Telegram Bot"
 [[workflows.workflow]]
 name = "Telegram Bot"
 author = "agent"
+mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"

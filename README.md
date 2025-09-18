@@ -23,7 +23,7 @@ To run this bot, you'll need the following installed:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/davlix/Telegram-anonymous-chat-bot.git
+   git clone https://github.com/tenuh/bbbbb234677888777/import.git
    cd Telegram-anonymous-chat-bot
    ```
 

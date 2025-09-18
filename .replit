@@ -24,9 +24,9 @@ name = "Telegram Bot"
 author = "agent"
 mode = "sequential"
 
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python anonymous_chat_bot.py"
-
-[workflows.workflow.metadata]
-outputType = "console"

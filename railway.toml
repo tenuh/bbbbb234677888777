@@ -1,0 +1,20 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python anonymous_chat_bot.py"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[[services]]
+name = "telegram-bot"
+source = "."
+
+[services.variables]
+TELEGRAM_BOT_TOKEN = { $ref = "TELEGRAM_BOT_TOKEN" }
+DATABASE_URL = { $ref = "DATABASE_URL" }
+
+[services.volumes]
+# No volumes needed for this stateless bot

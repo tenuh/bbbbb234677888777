@@ -262,6 +262,16 @@ class MatchmakingService:
         attempts = 0
         
         while attempts < MAX_RETRY_ATTEMPTS:
+            # Check if user is already connected (matched by someone else's retry)
+            if user_id in self.active_sessions:
+                # User was connected by another user's retry, stop this retry loop
+                return
+                
+            # Check if user is no longer in waiting queue (maybe left or ended)
+            if user_id not in self.waiting_users:
+                # User left the queue, stop retry
+                return
+            
             attempts += 1
             
             partner_id = await self.find_partner(user_id, context)
@@ -271,6 +281,10 @@ class MatchmakingService:
                 return
             
             if attempts < MAX_RETRY_ATTEMPTS:
+                # Check again before sending retry message
+                if user_id in self.active_sessions or user_id not in self.waiting_users:
+                    return
+                    
                 # Send retry message
                 retry_msg = Messages.NO_PARTNER_RETRYING.format(
                     RETRY_MATCHING_INTERVAL, attempts, MAX_RETRY_ATTEMPTS
@@ -278,7 +292,10 @@ class MatchmakingService:
                 await context.bot.send_message(user_id, retry_msg)
                 await asyncio.sleep(RETRY_MATCHING_INTERVAL)
             
-        # Final attempt failed
+        # Final attempt failed - but check one more time
+        if user_id in self.active_sessions:
+            return  # User got connected during final sleep
+            
         await self.remove_from_queue(user_id)
         await context.bot.send_message(
             user_id, 

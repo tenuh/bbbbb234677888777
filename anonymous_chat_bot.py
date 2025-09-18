@@ -46,7 +46,7 @@ if not TOKEN:
 
 # Conversation states
 PROFILE_NAME, PROFILE_AGE, PROFILE_BIO, PROFILE_LOCATION, PROFILE_INTERESTS = range(5)
-ADMIN_BROADCAST_MESSAGE = range(1)
+ADMIN_BROADCAST_MESSAGE, ADMIN_BAN_USER, ADMIN_UNBAN_USER = range(3)
 
 # Messages and UI
 class Messages:
@@ -177,6 +177,8 @@ class Keyboards:
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("⏭️ Skip Partner", callback_data='skip_chat')],
             [InlineKeyboardButton("🛑 End Chat", callback_data='end_chat')],
+            [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile'), 
+             InlineKeyboardButton("📷 Send Photo", callback_data='send_photo')],
             [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
         ])
     
@@ -629,6 +631,29 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'report_user':
         await handle_report_user_callback(query, context)
     
+    elif data == 'back_to_chat':
+        await query.edit_message_text(
+            "💬 **Back to Chat**\n\nYou can continue chatting. Use the buttons below:",
+            reply_markup=Keyboards.chat_controls(),
+            parse_mode='Markdown'
+        )
+    
+    # Profile management
+    elif data == 'edit_profile':
+        await handle_edit_profile_callback(query, context)
+    
+    elif data == 'set_interests':
+        await handle_set_interests_callback(query, context)
+    
+    elif data.startswith('edit_'):
+        await handle_profile_edit_callback(query, context)
+    
+    elif data == 'view_partner_profile':
+        await handle_view_partner_profile_callback(query, context)
+    
+    elif data == 'send_photo':
+        await handle_send_photo_callback(query, context)
+    
     # Admin panel
     elif data.startswith('admin_') and is_admin(user_id):
         await handle_admin_callback(query, context)
@@ -727,6 +752,108 @@ async def show_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
             parse_mode='Markdown'
         )
 
+# Profile Management Handlers
+async def handle_edit_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle edit profile button callback"""
+    edit_menu = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📝 Edit Bio", callback_data='edit_bio')],
+        [InlineKeyboardButton("🎂 Edit Age", callback_data='edit_age')],
+        [InlineKeyboardButton("📍 Edit Location", callback_data='edit_location')],
+        [InlineKeyboardButton("🔙 Back to Profile", callback_data='view_profile')]
+    ])
+    
+    await query.edit_message_text(
+        "✏️ **Edit Profile**\n\nWhat would you like to edit?",
+        reply_markup=edit_menu,
+        parse_mode='Markdown'
+    )
+
+async def handle_set_interests_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle set interests button callback"""
+    await query.edit_message_text(
+        "💭 **Set Your Interests**\n\nType your interests separated by commas (e.g., music, sports, movies):",
+        parse_mode='Markdown'
+    )
+    context.user_data['editing_state'] = 'interests'
+
+async def handle_profile_edit_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle specific profile field editing"""
+    data = query.data
+    
+    if data == 'edit_bio':
+        await query.edit_message_text(
+            "📝 **Edit Bio**\n\nTell us about yourself (max 200 characters):",
+            parse_mode='Markdown'
+        )
+        context.user_data['editing_state'] = 'bio'
+    
+    elif data == 'edit_age':
+        await query.edit_message_text(
+            "🎂 **Edit Age**\n\nEnter your age (18-80):",
+            parse_mode='Markdown'
+        )
+        context.user_data['editing_state'] = 'age'
+    
+    elif data == 'edit_location':
+        await query.edit_message_text(
+            "📍 **Edit Location**\n\nEnter your location (city, country):",
+            parse_mode='Markdown'
+        )
+        context.user_data['editing_state'] = 'location'
+
+async def handle_view_partner_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle view partner profile during chat"""
+    user_id = query.from_user.id
+    partner_id = matchmaking.get_partner(user_id)
+    
+    if not partner_id:
+        await query.answer("❌ You're not in a chat right now.")
+        return
+    
+    with database.get_db() as db:
+        partner = database.get_user(db, partner_id)
+        if not partner:
+            await query.answer("❌ Partner not found.")
+            return
+        
+        interests = ", ".join([interest.name for interest in partner.interests]) if partner.interests else "None set"
+        
+        profile_text = f"""👤 **Partner's Profile**
+
+🎭 **Nickname:** {partner.nickname}
+👤 **Gender:** {partner.gender.title()}
+📝 **Bio:** {partner.bio or "Not set"}
+🎂 **Age:** {partner.age or "Not set"}
+📍 **Location:** {partner.location or "Not set"}
+💭 **Interests:** {interests}
+📊 **Total Chats:** {partner.total_chats}"""
+        
+        back_to_chat = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Back to Chat", callback_data='back_to_chat')]
+        ])
+        
+        await query.edit_message_text(
+            profile_text,
+            reply_markup=back_to_chat,
+            parse_mode='Markdown'
+        )
+
+async def handle_send_photo_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle send photo option during chat"""
+    user_id = query.from_user.id
+    partner_id = matchmaking.get_partner(user_id)
+    
+    if not partner_id:
+        await query.answer("❌ You're not in a chat right now.")
+        return
+    
+    await query.edit_message_text(
+        "📷 **Send a Photo**\n\nSend one photo now. Your partner will receive it once:",
+        parse_mode='Markdown'
+    )
+    context.user_data['sending_photo'] = True
+    context.user_data['photo_partner'] = partner_id
+
 async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle skip chat button callback"""
     user_id = query.from_user.id
@@ -822,6 +949,86 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
 📅 **Date:** {datetime.now().strftime('%Y-%m-%d %H:%M')}"""
             
             await query.edit_message_text(stats_text, parse_mode='Markdown')
+    
+    elif data == 'admin_users':
+        user_mgmt_menu = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🚫 Ban User", callback_data='admin_ban_user')],
+            [InlineKeyboardButton("✅ Unban User", callback_data='admin_unban_user')],
+            [InlineKeyboardButton("📋 List Banned", callback_data='admin_list_banned')],
+            [InlineKeyboardButton("🔙 Back", callback_data='admin_panel_back')]
+        ])
+        await query.edit_message_text(
+            "👥 **User Management**\n\nChoose an action:",
+            reply_markup=user_mgmt_menu,
+            parse_mode='Markdown'
+        )
+    
+    elif data == 'admin_reports':
+        with database.get_db() as db:
+            reports = database.get_pending_reports(db)
+            if not reports:
+                await query.edit_message_text(
+                    "📝 **Reports**\n\n✅ No pending reports.",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            reports_text = "📝 **Pending Reports**\n\n"
+            for report in reports[:10]:  # Show max 10 reports
+                reporter = database.get_user(db, report.reporter_id)
+                reported = database.get_user(db, report.reported_id)
+                reports_text += f"**Report #{report.id}**\n"
+                reports_text += f"👤 Reporter: {reporter.nickname} (ID: {report.reporter_id})\n"
+                reports_text += f"🎯 Reported: {reported.nickname} (ID: {report.reported_id})\n"
+                reports_text += f"📝 Reason: {report.reason or 'No reason provided'}\n"
+                reports_text += f"📅 Date: {report.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+            
+            if len(reports) > 10:
+                reports_text += f"... and {len(reports) - 10} more reports"
+            
+            await query.edit_message_text(reports_text, parse_mode='Markdown')
+    
+    elif data == 'admin_ban_user':
+        await query.edit_message_text(
+            "🚫 **Ban User**\n\nSend the user ID to ban:",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_ban_user'
+    
+    elif data == 'admin_unban_user':
+        await query.edit_message_text(
+            "✅ **Unban User**\n\nSend the user ID to unban:",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_unban_user'
+    
+    elif data == 'admin_list_banned':
+        with database.get_db() as db:
+            banned_users = database.get_banned_users(db)
+            if not banned_users:
+                await query.edit_message_text(
+                    "📋 **Banned Users**\n\n✅ No banned users.",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            banned_text = "📋 **Banned Users**\n\n"
+            for user in banned_users[:15]:  # Show max 15
+                banned_text += f"**{user.nickname}** (ID: {user.user_id})\n"
+                banned_text += f"📝 Reason: {user.ban_reason or 'No reason'}\n"
+                banned_text += f"📅 Banned: {user.ban_date.strftime('%Y-%m-%d')}\n\n"
+            
+            if len(banned_users) > 15:
+                banned_text += f"... and {len(banned_users) - 15} more"
+            
+            await query.edit_message_text(banned_text, parse_mode='Markdown')
+    
+    elif data == 'admin_panel_back':
+        await query.edit_message_text(
+            Messages.ADMIN_PANEL,
+            reply_markup=Keyboards.admin_panel(),
+            parse_mode='Markdown'
+        )
 
 # Message Handler
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -829,9 +1036,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = update.effective_user.id
     message_text = update.message.text
     
-    # Check for admin broadcast state
-    if context.user_data.get('admin_state') == 'awaiting_broadcast' and is_admin(user_id):
-        await handle_admin_broadcast(update, context)
+    # Check for admin states
+    admin_state = context.user_data.get('admin_state')
+    if admin_state and is_admin(user_id):
+        if admin_state == 'awaiting_broadcast':
+            await handle_admin_broadcast(update, context)
+            return
+        elif admin_state == 'awaiting_ban_user':
+            await handle_admin_ban_user(update, context)
+            return
+        elif admin_state == 'awaiting_unban_user':
+            await handle_admin_unban_user(update, context)
+            return
+        elif admin_state == 'awaiting_ban_reason':
+            await handle_admin_ban_reason(update, context)
+            return
+    
+    # Check for profile editing states
+    editing_state = context.user_data.get('editing_state')
+    if editing_state:
+        await handle_profile_editing(update, context, editing_state)
         return
     
     # Check if user is in chat
@@ -901,6 +1125,191 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
     
     context.user_data.pop('admin_state', None)
 
+# New handler functions for admin and profile management
+async def handle_admin_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin ban user"""
+    try:
+        user_id_to_ban = int(update.message.text.strip())
+        admin_id = update.effective_user.id
+        
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_ban)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                return
+            
+            if user.is_banned:
+                await update.message.reply_text(f"⚠️ User {user.nickname} (ID: {user_id_to_ban}) is already banned.")
+                return
+            
+            # Ask for ban reason
+            context.user_data['ban_user_id'] = user_id_to_ban
+            context.user_data['admin_state'] = 'awaiting_ban_reason'
+            await update.message.reply_text(
+                f"👤 **{user.nickname}** (ID: {user_id_to_ban})\n\nEnter ban reason (or send 'skip' for no reason):",
+                parse_mode='Markdown'
+            )
+            
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+async def handle_admin_unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin unban user"""
+    try:
+        user_id_to_unban = int(update.message.text.strip())
+        admin_id = update.effective_user.id
+        
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_unban)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                return
+            
+            if not user.is_banned:
+                await update.message.reply_text(f"⚠️ User {user.nickname} (ID: {user_id_to_unban}) is not banned.")
+                return
+            
+            database.unban_user(db, user_id_to_unban, admin_id)
+            db.commit()
+            
+            await update.message.reply_text(
+                f"✅ **User Unbanned**\n\n👤 {user.nickname} (ID: {user_id_to_unban}) has been unbanned.",
+                parse_mode='Markdown'
+            )
+            
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+    
+    context.user_data.pop('admin_state', None)
+
+async def handle_profile_editing(update: Update, context: ContextTypes.DEFAULT_TYPE, editing_state: str) -> None:
+    """Handle profile editing states"""
+    user_id = update.effective_user.id
+    message_text = update.message.text
+    
+    with database.get_db() as db:
+        success = False
+        
+        if editing_state == 'bio':
+            if len(message_text) <= 200:
+                success = database.update_user_profile(db, user_id, 'bio', message_text)
+            else:
+                await update.message.reply_text("❌ Bio must be 200 characters or less. Try again:")
+                return
+                
+        elif editing_state == 'age':
+            success = database.update_user_profile(db, user_id, 'age', message_text)
+            if not success:
+                await update.message.reply_text("❌ Please enter a valid age between 18 and 80:")
+                return
+                
+        elif editing_state == 'location':
+            if len(message_text) <= 100:
+                success = database.update_user_profile(db, user_id, 'location', message_text)
+            else:
+                await update.message.reply_text("❌ Location must be 100 characters or less. Try again:")
+                return
+                
+        elif editing_state == 'interests':
+            interests = [i.strip() for i in message_text.split(',') if i.strip()]
+            if len(interests) > 10:
+                await update.message.reply_text("❌ Maximum 10 interests allowed. Try again:")
+                return
+            success = database.set_user_interests(db, user_id, interests)
+        
+        if success:
+            db.commit()
+            await update.message.reply_text(
+                "✅ Profile updated successfully!",
+                reply_markup=Keyboards.profile_menu()
+            )
+        else:
+            await update.message.reply_text("❌ Failed to update profile. Please try again.")
+    
+    context.user_data.pop('editing_state', None)
+
+# Photo handler
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle photo messages"""
+    user_id = update.effective_user.id
+    
+    # Check if user is sending a photo in chat
+    if context.user_data.get('sending_photo'):
+        partner_id = context.user_data.get('photo_partner')
+        
+        if partner_id and matchmaking.get_partner(user_id) == partner_id:
+            try:
+                # Forward photo to partner
+                await context.bot.send_photo(
+                    partner_id,
+                    update.message.photo[-1].file_id,
+                    caption="📷 Your chat partner sent you a photo!"
+                )
+                
+                await update.message.reply_text(
+                    "✅ Photo sent to your partner!",
+                    reply_markup=Keyboards.chat_controls()
+                )
+                
+            except TelegramError as e:
+                logger.error(f"Failed to forward photo: {e}")
+                await update.message.reply_text("❌ Failed to send photo. Your partner may have left.")
+        else:
+            await update.message.reply_text("❌ You're not in an active chat.")
+        
+        context.user_data.pop('sending_photo', None)
+        context.user_data.pop('photo_partner', None)
+    
+    else:
+        # User sent photo outside of chat
+        await update.message.reply_text(
+            "📷 To send photos, you need to be in an active chat and use the 'Send Photo' button.",
+            reply_markup=Keyboards.main_menu()
+        )
+
+async def handle_admin_ban_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin ban reason input"""
+    reason = update.message.text.strip()
+    user_id_to_ban = context.user_data.get('ban_user_id')
+    admin_id = update.effective_user.id
+    
+    if not user_id_to_ban:
+        await update.message.reply_text("❌ Session expired. Please try again.")
+        context.user_data.pop('admin_state', None)
+        return
+    
+    ban_reason = None if reason.lower() == 'skip' else reason
+    
+    try:
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_ban)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                return
+            
+            database.ban_user(db, user_id_to_ban, admin_id, ban_reason)
+            db.commit()
+            
+            # Remove user from any active chat
+            partner_id = matchmaking.get_partner(user_id_to_ban)
+            if partner_id:
+                matchmaking.end_session(user_id_to_ban, partner_id)
+            
+            await update.message.reply_text(
+                f"⛔ **User Banned**\n\n👤 {user.nickname} (ID: {user_id_to_ban})\n📝 Reason: {ban_reason or 'No reason provided'}",
+                parse_mode='Markdown'
+            )
+            
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+    
+    context.user_data.pop('admin_state', None)
+    context.user_data.pop('ban_user_id', None)
+
 def main() -> None:
     """Start the bot"""
     # Initialize database
@@ -921,6 +1330,7 @@ def main() -> None:
     application.add_handler(CommandHandler("admin", admin_command))
     
     application.add_handler(CallbackQueryHandler(button_callback))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Set bot commands

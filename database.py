@@ -201,6 +201,70 @@ def unban_user(db, user_id: int, admin_id: int):
         db.add(admin_action)
         db.flush()
 
+def get_pending_reports(db):
+    """Get all pending user reports"""
+    return db.query(UserReport).filter(
+        UserReport.reviewed == False
+    ).order_by(UserReport.created_at.desc()).all()
+
+def get_banned_users(db):
+    """Get all banned users"""
+    return db.query(User).filter(
+        User.is_banned == True
+    ).order_by(User.ban_date.desc()).all()
+
+def update_user_profile(db, user_id: int, field: str, value):
+    """Update a specific field in user profile"""
+    user = get_user(db, user_id)
+    if user:
+        if field == 'bio':
+            user.bio = value
+        elif field == 'age':
+            try:
+                age = int(value)
+                if 18 <= age <= 80:
+                    user.age = age
+                else:
+                    return False
+            except ValueError:
+                return False
+        elif field == 'location':
+            user.location = value
+        
+        user.last_active = datetime.utcnow()
+        db.flush()
+        return True
+    return False
+
+def set_user_interests(db, user_id: int, interests_list: List[str]):
+    """Set user interests"""
+    user = get_user(db, user_id)
+    if not user:
+        return False
+    
+    # Clear existing interests
+    user.interests.clear()
+    
+    # Add new interests
+    for interest_name in interests_list:
+        interest_name = interest_name.strip().lower()
+        if interest_name and len(interest_name) <= 50:
+            # Get or create interest
+            interest = db.query(Interest).filter(
+                Interest.name == interest_name
+            ).first()
+            
+            if not interest:
+                interest = Interest(name=interest_name)
+                db.add(interest)
+                db.flush()
+            
+            user.interests.append(interest)
+    
+    user.last_active = datetime.utcnow()
+    db.flush()
+    return True
+
 def create_chat_session(db, user_a_id: int, user_b_id: int) -> ChatSession:
     """Create a new chat session"""
     session = ChatSession(

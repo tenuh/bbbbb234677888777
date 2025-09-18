@@ -8,7 +8,7 @@ expertMode = true
 integrations = ["python_database:1.0.0"]
 
 [workflows]
-runButton = "Telegram Bot"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"

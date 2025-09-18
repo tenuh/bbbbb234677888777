@@ -164,7 +164,7 @@ def get_active_users_count(db) -> int:
     since = datetime.utcnow() - timedelta(hours=24)
     return db.query(User).filter(User.last_active >= since).count()
 
-def ban_user(db, user_id: int, admin_id: int, reason: str = None):
+def ban_user(db, user_id: int, admin_id: int, reason: Optional[str] = None):
     """Ban a user"""
     user = get_user(db, user_id)
     if user:
@@ -236,7 +236,7 @@ def get_active_chat_session(db, user_id: int) -> Optional[ChatSession]:
         ChatSession.is_active == True
     ).first()
 
-def create_user_report(db, reporter_id: int, reported_id: int, chat_session_id: int = None, reason: str = None):
+def create_user_report(db, reporter_id: int, reported_id: int, chat_session_id: Optional[int] = None, reason: Optional[str] = None):
     """Create a user report"""
     report = UserReport(
         reporter_id=reporter_id,

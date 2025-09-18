@@ -343,7 +343,7 @@ NICKNAMES = [
 def get_unique_nickname() -> str:
     """Get a unique nickname"""
     with database.get_db() as db:
-        used_nicknames = {user.nickname for user in db.query(database.User.nickname).all()}
+        used_nicknames = {user.nickname for user in db.query(database.User).all()}
         available = [n for n in NICKNAMES if n not in used_nicknames]
         return random.choice(available if available else NICKNAMES)
 
@@ -548,8 +548,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /privacy command"""
+    # Create privacy keyboard with back button
+    privacy_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
+    ])
     await update.message.reply_text(
         Messages.PRIVACY_INFO,
+        reply_markup=privacy_keyboard,
         parse_mode='Markdown'
     )
 
@@ -586,7 +591,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
     
     elif data == 'privacy_info':
-        await query.edit_message_text(Messages.PRIVACY_INFO, parse_mode='Markdown')
+        # Create privacy keyboard with back button
+        privacy_keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
+        ])
+        await query.edit_message_text(Messages.PRIVACY_INFO, reply_markup=privacy_keyboard, parse_mode='Markdown')
     
     elif data == 'main_menu':
         with database.get_db() as db:

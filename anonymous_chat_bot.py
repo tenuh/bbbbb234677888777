@@ -182,8 +182,7 @@ class Keyboards:
             [InlineKeyboardButton("⏭️ Skip Partner", callback_data='skip_chat')],
             [InlineKeyboardButton("🛑 End Chat", callback_data='end_chat')],
             [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
-            [InlineKeyboardButton("📷 Send Photo", callback_data='send_photo'),
-             InlineKeyboardButton("💥 Send View-Once", callback_data='send_view_once')],
+            [InlineKeyboardButton("💥 Send View-Once", callback_data='send_view_once')],
             [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
         ])
     

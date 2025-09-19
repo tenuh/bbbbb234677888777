@@ -181,8 +181,9 @@ class Keyboards:
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("⏭️ Skip Partner", callback_data='skip_chat')],
             [InlineKeyboardButton("🛑 End Chat", callback_data='end_chat')],
-            [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile'), 
-             InlineKeyboardButton("📷 Send Photo", callback_data='send_photo')],
+            [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
+            [InlineKeyboardButton("📷 Send Photo", callback_data='send_photo'),
+             InlineKeyboardButton("💥 Send View-Once", callback_data='send_view_once')],
             [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
         ])
     
@@ -630,6 +631,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'send_photo':
         await handle_send_photo_callback(query, context)
     
+    elif data == 'send_view_once':
+        await handle_send_view_once_callback(query, context)
+    
     # Search controls
     elif data == 'stop_search':
         await handle_stop_search_callback(query, context)
@@ -836,10 +840,26 @@ async def handle_send_photo_callback(query, context: ContextTypes.DEFAULT_TYPE) 
         return
     
     await query.edit_message_text(
-        "📷 **Send a Photo**\n\nSend one photo now. Your partner will receive it once:",
+        "📷 **Send a Photo**\n\nSend one photo now. Your partner will receive it (protected from screenshots):",
         parse_mode='Markdown'
     )
     context.user_data['sending_photo'] = True
+    context.user_data['photo_partner'] = partner_id
+
+async def handle_send_view_once_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle send view-once photo option during chat"""
+    user_id = query.from_user.id
+    partner_id = matchmaking.get_partner(user_id)
+    
+    if not partner_id:
+        await query.answer("❌ You're not in a chat right now.")
+        return
+    
+    await query.edit_message_text(
+        "💥 **Send View-Once Photo**\n\nSend one photo now. Your partner will see it only once and it will disappear after viewing:",
+        parse_mode='Markdown'
+    )
+    context.user_data['sending_view_once'] = True
     context.user_data['photo_partner'] = partner_id
 
 async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1062,7 +1082,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text(Messages.WARNING_MESSAGE, parse_mode='Markdown')
         
         try:
-            await context.bot.send_message(partner_id, message_text)
+            await context.bot.send_message(
+                partner_id, 
+                message_text,
+                protect_content=True  # Prevent screenshots and forwarding
+            )
             
             # Update activity
             with database.get_db() as db:
@@ -1232,21 +1256,51 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Handle photo messages"""
     user_id = update.effective_user.id
     
-    # Check if user is sending a photo in chat
-    if context.user_data.get('sending_photo'):
+    # Check if user is sending a view-once photo
+    if context.user_data.get('sending_view_once'):
         partner_id = context.user_data.get('photo_partner')
         
         if partner_id and matchmaking.get_partner(user_id) == partner_id:
             try:
-                # Forward photo to partner
+                # Send view-once photo to partner
                 await context.bot.send_photo(
                     partner_id,
                     update.message.photo[-1].file_id,
-                    caption="📷 Your chat partner sent you a photo!"
+                    caption="💥 Your chat partner sent you a view-once photo!",
+                    protect_content=True,
+                    has_spoiler=True  # Makes photo blurred until clicked
                 )
                 
                 await update.message.reply_text(
-                    "✅ Photo sent to your partner!",
+                    "✅ View-once photo sent! It will disappear after your partner views it.",
+                    reply_markup=Keyboards.chat_controls()
+                )
+                
+            except TelegramError as e:
+                logger.error(f"Failed to forward view-once photo: {e}")
+                await update.message.reply_text("❌ Failed to send photo. Your partner may have left.")
+        else:
+            await update.message.reply_text("❌ You're not in an active chat.")
+        
+        context.user_data.pop('sending_view_once', None)
+        context.user_data.pop('photo_partner', None)
+    
+    # Check if user is sending a regular photo in chat
+    elif context.user_data.get('sending_photo'):
+        partner_id = context.user_data.get('photo_partner')
+        
+        if partner_id and matchmaking.get_partner(user_id) == partner_id:
+            try:
+                # Forward protected photo to partner
+                await context.bot.send_photo(
+                    partner_id,
+                    update.message.photo[-1].file_id,
+                    caption="📷 Your chat partner sent you a photo!",
+                    protect_content=True  # Prevent screenshots and forwarding
+                )
+                
+                await update.message.reply_text(
+                    "✅ Photo sent to your partner! (Protected from screenshots)",
                     reply_markup=Keyboards.chat_controls()
                 )
                 

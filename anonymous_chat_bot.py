@@ -771,7 +771,8 @@ async def handle_edit_profile_callback(query, context: ContextTypes.DEFAULT_TYPE
         [InlineKeyboardButton("📝 Edit Bio", callback_data='edit_bio')],
         [InlineKeyboardButton("🎂 Edit Age", callback_data='edit_age')],
         [InlineKeyboardButton("📍 Edit Location", callback_data='edit_location')],
-        [InlineKeyboardButton("🔙 Back to Profile", callback_data='view_profile')]
+        [InlineKeyboardButton("🔙 Back to Profile", callback_data='view_profile')],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data='main_menu')]
     ])
     
     await query.edit_message_text(

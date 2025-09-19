@@ -1412,6 +1412,25 @@ async def handle_admin_ban_reason(update: Update, context: ContextTypes.DEFAULT_
     context.user_data.pop('admin_state', None)
     context.user_data.pop('ban_user_id', None)
 
+async def viewonce_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /viewonce command for sending disappearing photos"""
+    user_id = update.effective_user.id
+    partner_id = matchmaking.get_partner(user_id)
+    
+    if not partner_id:
+        await update.message.reply_text(
+            "❌ You need to be in an active chat to send view-once photos. Use /find to start chatting!",
+            reply_markup=Keyboards.main_menu()
+        )
+        return
+    
+    await update.message.reply_text(
+        "💥 **Send View-Once Photo**\n\nSend one photo now. Your partner will see it only once and it will disappear after 30 seconds:",
+        parse_mode='Markdown'
+    )
+    context.user_data['sending_view_once'] = True
+    context.user_data['photo_partner'] = partner_id
+
 # Search control handlers
 async def handle_stop_search_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle stop search button callback"""
@@ -1473,6 +1492,7 @@ def main() -> None:
     application.add_handler(CommandHandler("profile", profile_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("privacy", privacy_command))
+    application.add_handler(CommandHandler("viewonce", viewonce_command))
     application.add_handler(CommandHandler("admin", admin_command))
     
     application.add_handler(CallbackQueryHandler(button_callback))
@@ -1487,6 +1507,7 @@ def main() -> None:
             BotCommand("skip", "Skip current chat partner"),
             BotCommand("stop", "End current chat"),
             BotCommand("profile", "View/edit your profile"),
+            BotCommand("viewonce", "Send a view-once disappearing photo"),
             BotCommand("help", "Show help menu"),
             BotCommand("privacy", "Privacy information"),
             BotCommand("admin", "Admin panel (admin only)")

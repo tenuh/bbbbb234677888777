@@ -80,11 +80,11 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
     REPORT_SENT = "✅ Report submitted successfully. We'll review this. The chat has been ended."
     REPORT_ONLY_IN_CHAT = "⚠️ You can only report users during an active chat."
     
-    MATCHING_STARTED = "🔍 **Searching for a chat partner...**\n\nWe're looking for someone to chat with. This may take a moment."
+    MATCHING_STARTED = "🔍 **Searching for a chat partner...**\n\nWe're looking for someone to chat with. Use the buttons below to control your search."
     PARTNER_FOUND = "🎉 **Connected with {}!** \n\nStart chatting now. Be respectful and have fun!"
     
-    NO_PARTNER_RETRYING = "⏳ No partner found yet. Retrying in {} seconds... (Attempt {}/{})"
-    NO_PARTNER_FINAL = "😔 **No chat partner found** after {} attempts.\n\nThere might not be anyone available right now. Try again later!"
+    NO_PARTNER_FOUND = "😔 **No chat partner found right now.**\n\nThere might not be anyone available at the moment. Try refreshing or check back later!"
+    SEARCH_STOPPED = "⏹️ **Search stopped.**\n\nYou can start a new search anytime using the menu below."
     
     PROFILE_UPDATED = "✅ Profile updated successfully!"
     PROFILE_INFO = """👤 **Your Profile**
@@ -206,6 +206,13 @@ class Keyboards:
             [InlineKeyboardButton("👤 Profile", callback_data='view_profile')],
             [InlineKeyboardButton("🔙 Main Menu", callback_data='main_menu')]
         ])
+    
+    @staticmethod
+    def searching_controls():
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Refresh Search", callback_data='refresh_search')],
+            [InlineKeyboardButton("⏹️ Stop Search", callback_data='stop_search')]
+        ])
 
 class MatchmakingService:
     def __init__(self):
@@ -259,51 +266,11 @@ class MatchmakingService:
                 
                 return partner_id
     
-    async def start_matching_with_retry(self, user_id: int, context: ContextTypes.DEFAULT_TYPE):
-        """Start matching with automatic retry"""
-        attempts = 0
-        
-        while attempts < MAX_RETRY_ATTEMPTS:
-            # Check if user is already connected (matched by someone else's retry)
-            if user_id in self.active_sessions:
-                # User was connected by another user's retry, stop this retry loop
-                return
-                
-            # Check if user is no longer in waiting queue (maybe left or ended)
-            if user_id not in self.waiting_users:
-                # User left the queue, stop retry
-                return
-            
-            attempts += 1
-            
-            partner_id = await self.find_partner(user_id, context)
-            if partner_id:
-                # Notify both users
-                await self.notify_match(context, user_id, partner_id)
-                return
-            
-            if attempts < MAX_RETRY_ATTEMPTS:
-                # Check again before sending retry message
-                if user_id in self.active_sessions or user_id not in self.waiting_users:
-                    return
-                    
-                # Send retry message
-                retry_msg = Messages.NO_PARTNER_RETRYING.format(
-                    RETRY_MATCHING_INTERVAL, attempts, MAX_RETRY_ATTEMPTS
-                )
-                await context.bot.send_message(user_id, retry_msg)
-                await asyncio.sleep(RETRY_MATCHING_INTERVAL)
-            
-        # Final attempt failed - but check one more time
-        if user_id in self.active_sessions:
-            return  # User got connected during final sleep
-            
-        await self.remove_from_queue(user_id)
-        await context.bot.send_message(
-            user_id, 
-            Messages.NO_PARTNER_FINAL.format(MAX_RETRY_ATTEMPTS),
-            reply_markup=Keyboards.main_menu()
-        )
+    def end_session(self, user_id: int, partner_id: int):
+        """End a chat session between two users"""
+        # Remove from active sessions
+        self.active_sessions.pop(user_id, None)
+        self.active_sessions.pop(partner_id, None)
     
     async def notify_match(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, partner_id: int):
         """Notify both users about successful match"""
@@ -454,10 +421,15 @@ async def handle_find_partner(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     if await matchmaking.add_to_queue(user_id):
-        await update.message.reply_text(Messages.MATCHING_STARTED)
-        # Start matching with retry in background
-        task = asyncio.create_task(matchmaking.start_matching_with_retry(user_id, context))
-        matchmaking.retry_tasks[user_id] = task
+        # Try to find partner immediately
+        partner_id = await matchmaking.find_partner(user_id, context)
+        if partner_id:
+            await matchmaking.notify_match(context, user_id, partner_id)
+        else:
+            await update.message.reply_text(
+                Messages.MATCHING_STARTED,
+                reply_markup=Keyboards.searching_controls()
+            )
     else:
         await update.message.reply_text("❌ Unable to start matching. Please try again.")
 
@@ -654,6 +626,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'send_photo':
         await handle_send_photo_callback(query, context)
     
+    # Search controls
+    elif data == 'stop_search':
+        await handle_stop_search_callback(query, context)
+    
+    elif data == 'refresh_search':
+        await handle_refresh_search_callback(query, context)
+    
     # Admin panel
     elif data.startswith('admin_') and is_admin(user_id):
         await handle_admin_callback(query, context)
@@ -715,10 +694,15 @@ async def handle_find_partner_callback(query, context: ContextTypes.DEFAULT_TYPE
         return
     
     if await matchmaking.add_to_queue(user_id):
-        await query.edit_message_text(Messages.MATCHING_STARTED)
-        # Start matching with retry in background
-        task = asyncio.create_task(matchmaking.start_matching_with_retry(user_id, context))
-        matchmaking.retry_tasks[user_id] = task
+        # Try to find partner immediately
+        partner_id = await matchmaking.find_partner(user_id, context)
+        if partner_id:
+            await matchmaking.notify_match(context, user_id, partner_id)
+        else:
+            await query.edit_message_text(
+                Messages.MATCHING_STARTED,
+                reply_markup=Keyboards.searching_controls()
+            )
     else:
         await query.edit_message_text("❌ Unable to start matching. Please try again.")
 
@@ -1058,6 +1042,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await handle_profile_editing(update, context, editing_state)
         return
     
+    # Check if user is searching - block commands during search
+    if user_id in matchmaking.waiting_users:
+        await update.message.reply_text(
+            "🔍 You're currently searching for a partner. Please use the search control buttons or stop your search to use commands."
+        )
+        return
+    
     # Check if user is in chat
     partner_id = matchmaking.get_partner(user_id)
     
@@ -1309,6 +1300,50 @@ async def handle_admin_ban_reason(update: Update, context: ContextTypes.DEFAULT_
     
     context.user_data.pop('admin_state', None)
     context.user_data.pop('ban_user_id', None)
+
+# Search control handlers
+async def handle_stop_search_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle stop search button callback"""
+    user_id = query.from_user.id
+    
+    # Remove user from waiting queue
+    await matchmaking.remove_from_queue(user_id)
+    
+    # Cancel any retry task
+    if user_id in matchmaking.retry_tasks:
+        task = matchmaking.retry_tasks[user_id]
+        if not task.done():
+            task.cancel()
+        del matchmaking.retry_tasks[user_id]
+    
+    await query.edit_message_text(
+        Messages.SEARCH_STOPPED,
+        reply_markup=Keyboards.main_menu(),
+        parse_mode='Markdown'
+    )
+
+async def handle_refresh_search_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle refresh search button callback"""
+    user_id = query.from_user.id
+    
+    # Check if user is still in waiting queue
+    if user_id not in matchmaking.waiting_users:
+        await query.edit_message_text(
+            "❌ You're not currently searching. Use the menu to start a new search:",
+            reply_markup=Keyboards.main_menu()
+        )
+        return
+    
+    # Try to find a partner
+    partner_id = await matchmaking.find_partner(user_id, context)
+    if partner_id:
+        await matchmaking.notify_match(context, user_id, partner_id)
+    else:
+        await query.edit_message_text(
+            Messages.NO_PARTNER_FOUND,
+            reply_markup=Keyboards.searching_controls(),
+            parse_mode='Markdown'
+        )
 
 def main() -> None:
     """Start the bot"""

@@ -45,8 +45,6 @@ builder = "NIXPACKS"
 
 [deploy]
 startCommand = "python anonymous_chat_bot.py"
-healthcheckPath = "/"
-healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
@@ -67,10 +65,9 @@ python-3.11.9
 ### requirements.txt
 ```
 python-telegram-bot[job-queue]==20.7
-psycopg2-binary
-python-dotenv
+psycopg2-binary==2.9.10
+python-dotenv==1.1.1
 sqlalchemy==2.0.43
-alembic==1.16.5
 ```
 
 ### Procfile (for compatibility)

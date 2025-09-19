@@ -34,6 +34,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Suppress sensitive HTTP logs that contain bot token
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext").setLevel(logging.WARNING)
+
 # Configuration
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_ID = 1395596220  # Fixed admin ID

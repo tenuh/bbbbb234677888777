@@ -3,8 +3,6 @@ builder = "NIXPACKS"
 
 [deploy]
 startCommand = "python anonymous_chat_bot.py"
-healthcheckPath = "/"
-healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 

@@ -1261,14 +1261,24 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         
         if partner_id and matchmaking.get_partner(user_id) == partner_id:
             try:
-                # Send view-once photo to partner
-                await context.bot.send_photo(
+                # Send view-once photo to partner with auto-delete functionality
+                sent_message = await context.bot.send_photo(
                     partner_id,
                     update.message.photo[-1].file_id,
-                    caption="💥 Your chat partner sent you a view-once photo!",
+                    caption="💥 Your chat partner sent you a view-once photo! This will be deleted after 30 seconds.",
                     protect_content=True,
                     has_spoiler=True  # Makes photo blurred until clicked
                 )
+                
+                # Schedule deletion of the view-once photo after 30 seconds
+                async def delete_view_once_photo():
+                    await asyncio.sleep(30)
+                    try:
+                        await context.bot.delete_message(chat_id=partner_id, message_id=sent_message.message_id)
+                    except Exception as e:
+                        logger.debug(f"Failed to delete view-once photo: {e}")
+                
+                asyncio.create_task(delete_view_once_photo())
                 
                 await update.message.reply_text(
                     "✅ View-once photo sent! It will disappear after your partner views it.",
@@ -1313,11 +1323,32 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         context.user_data.pop('photo_partner', None)
     
     else:
-        # User sent photo outside of chat
-        await update.message.reply_text(
-            "📷 To send photos, you need to be in an active chat and use the 'Send Photo' button.",
-            reply_markup=Keyboards.main_menu()
-        )
+        # Check if user is in an active chat and allow normal photo sending
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            try:
+                # Send normal photo to partner
+                await context.bot.send_photo(
+                    partner_id,
+                    update.message.photo[-1].file_id,
+                    caption="📷 Your chat partner sent you a photo!",
+                    protect_content=True  # Prevent screenshots and forwarding
+                )
+                
+                await update.message.reply_text(
+                    "✅ Photo sent to your partner! (Protected from screenshots)",
+                    reply_markup=Keyboards.chat_controls()
+                )
+                
+            except TelegramError as e:
+                logger.error(f"Failed to forward photo: {e}")
+                await update.message.reply_text("❌ Failed to send photo. Your partner may have left.")
+        else:
+            # User sent photo outside of chat
+            await update.message.reply_text(
+                "📷 To send photos, you need to be in an active chat.",
+                reply_markup=Keyboards.main_menu()
+            )
 
 async def handle_admin_ban_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle admin ban reason input"""

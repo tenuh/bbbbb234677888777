@@ -30,3 +30,7 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "TELEGRAM_BOT_TOKEN=\"7515175653:AAGcJClIz1bF4Kh5cLIvFEoD-rHUc5CtuEo\" python anonymous_chat_bot.py"
+
+[deployment]
+deploymentTarget = "vm"
+run = ["python", "anonymous_chat_bot.py"]

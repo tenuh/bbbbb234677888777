@@ -200,7 +200,8 @@ class Keyboards:
             [InlineKeyboardButton("👥 User Management", callback_data='admin_users')],
             [InlineKeyboardButton("📢 Broadcast", callback_data='admin_broadcast')],
             [InlineKeyboardButton("📊 Statistics", callback_data='admin_stats')],
-            [InlineKeyboardButton("📝 Reports", callback_data='admin_reports')]
+            [InlineKeyboardButton("📝 Reports", callback_data='admin_reports')],
+            [InlineKeyboardButton("🔙 Main Menu", callback_data='main_menu')]
         ])
     
     @staticmethod
@@ -215,7 +216,8 @@ class Keyboards:
     def searching_controls():
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("🔄 Refresh Search", callback_data='refresh_search')],
-            [InlineKeyboardButton("⏹️ Stop Search", callback_data='stop_search')]
+            [InlineKeyboardButton("⏹️ Stop Search", callback_data='stop_search')],
+            [InlineKeyboardButton("🔙 Main Menu", callback_data='main_menu')]
         ])
 
 class MatchmakingService:
@@ -277,7 +279,7 @@ class MatchmakingService:
         self.active_sessions.pop(partner_id, None)
     
     async def notify_match(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, partner_id: int):
-        """Notify both users about successful match"""
+        """Notify both users about successful match and auto-delete search panels"""
         with database.get_db() as db:
             user = database.get_user(db, user_id)
             partner = database.get_user(db, partner_id)
@@ -285,6 +287,21 @@ class MatchmakingService:
             if user and partner:
                 user_msg = Messages.PARTNER_FOUND.format(partner.nickname)
                 partner_msg = Messages.PARTNER_FOUND.format(user.nickname)
+                
+                # Delete search messages for both users if they exist
+                for uid in [user_id, partner_id]:
+                    search_msg_key = f'search_message_{uid}'
+                    if search_msg_key in context.user_data:
+                        try:
+                            msg_info = context.user_data[search_msg_key]
+                            await context.bot.delete_message(
+                                chat_id=msg_info['chat_id'], 
+                                message_id=msg_info['message_id']
+                            )
+                        except Exception as e:
+                            logger.debug(f"Failed to delete search message for user {uid}: {e}")
+                        finally:
+                            context.user_data.pop(search_msg_key, None)
                 
                 await context.bot.send_message(user_id, user_msg, reply_markup=Keyboards.chat_controls())
                 await context.bot.send_message(partner_id, partner_msg, reply_markup=Keyboards.chat_controls())
@@ -704,12 +721,16 @@ async def handle_find_partner_callback(query, context: ContextTypes.DEFAULT_TYPE
         # Try to find partner immediately
         partner_id = await matchmaking.find_partner(user_id, context)
         if partner_id:
+            # Store message info for auto-deletion and notify match
+            context.user_data[f'search_message_{user_id}'] = {'chat_id': query.message.chat_id, 'message_id': query.message.message_id}
             await matchmaking.notify_match(context, user_id, partner_id)
         else:
             await query.edit_message_text(
                 Messages.MATCHING_STARTED,
                 reply_markup=Keyboards.searching_controls()
             )
+            # Store message info for potential auto-deletion later
+            context.user_data[f'search_message_{user_id}'] = {'chat_id': query.message.chat_id, 'message_id': query.message.message_id}
     else:
         await query.edit_message_text("❌ Unable to start matching. Please try again.")
 
@@ -820,7 +841,8 @@ async def handle_view_partner_profile_callback(query, context: ContextTypes.DEFA
 📊 **Total Chats:** {partner.total_chats}"""
         
         back_to_chat = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Back to Chat", callback_data='back_to_chat')]
+            [InlineKeyboardButton("🔙 Back to Chat", callback_data='back_to_chat')],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data='main_menu')]
         ])
         
         await query.edit_message_text(

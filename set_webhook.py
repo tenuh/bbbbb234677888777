@@ -11,7 +11,7 @@ import sys
 def set_webhook(bot_token, webhook_url):
     """Set the webhook for the Telegram bot"""
     
-    api_url = f"https://api.telegram.org/bot{bot_token}/setWebhook"
+    api_url = f"https://api.telegram.org/bot{7515175653:AAGcJClIz1bF4Kh5cLIvFEoD-rHUc5CtuEo}/setWebhook"
     
     print(f"🔗 Setting webhook to: {webhook_url}")
     
@@ -85,7 +85,7 @@ def main():
     
     # Ensure URL has https://
     if not vercel_url.startswith('http'):
-        vercel_url = f"https://{vercel_url}"
+        vercel_url = f"https://bbbbb234677888777.vercel.app/"
     
     # Add webhook endpoint
     webhook_url = f"{vercel_url}/api/webhook"

@@ -334,6 +334,27 @@ class MatchmakingService:
     def get_partner(self, user_id: int) -> Optional[int]:
         """Get current chat partner"""
         return self.active_sessions.get(user_id)
+    
+    async def start_matching_with_retry(self, user_id: int, context: ContextTypes.DEFAULT_TYPE):
+        """Start matching process with retry logic"""
+        attempts = 0
+        while attempts < MAX_RETRY_ATTEMPTS and user_id in self.waiting_users:
+            await asyncio.sleep(RETRY_MATCHING_INTERVAL)
+            
+            partner_id = await self.find_partner(user_id, context)
+            if partner_id:
+                await self.notify_match(context, user_id, partner_id)
+                break
+            
+            attempts += 1
+        
+        if user_id in self.waiting_users and attempts >= MAX_RETRY_ATTEMPTS:
+            self.waiting_users.discard(user_id)
+            await context.bot.send_message(
+                user_id,
+                Messages.NO_PARTNER_FOUND,
+                reply_markup=Keyboards.main_menu()
+            )
 
 # Global service instance
 matchmaking = MatchmakingService()
@@ -1008,8 +1029,8 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
                 reporter = database.get_user(db, report.reporter_id)
                 reported = database.get_user(db, report.reported_id)
                 reports_text += f"**Report #{report.id}**\n"
-                reports_text += f"👤 Reporter: {reporter.nickname} (ID: {report.reporter_id})\n"
-                reports_text += f"🎯 Reported: {reported.nickname} (ID: {report.reported_id})\n"
+                reports_text += f"👤 Reporter: {reporter.nickname if reporter else 'Unknown'} (ID: {report.reporter_id})\n"
+                reports_text += f"🎯 Reported: {reported.nickname if reported else 'Unknown'} (ID: {report.reported_id})\n"
                 reports_text += f"📝 Reason: {report.reason or 'No reason provided'}\n"
                 reports_text += f"📅 Date: {report.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
             

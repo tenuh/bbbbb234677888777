@@ -95,6 +95,7 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
 
 🎭 **Nickname:** {}
 👤 **Gender:** {}
+😊 **Mood:** {}
 📝 **Bio:** {}
 🎂 **Age:** {}
 📍 **Location:** {}
@@ -113,9 +114,18 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
 • `/stop` - End current chat session
 • `/report` - Report inappropriate behavior
 
+🎮 **Fun Features During Chat:**
+• 🎮 Play Games - Would You Rather, Truth or Dare, Two Truths & A Lie
+• 🎁 Send Gifts - Send virtual gifts to your partner
+• 💡 Icebreakers - Get conversation starter questions
+• 💬 Compliments - Send random compliments
+• 🎯 Fun Facts - Share interesting facts
+• 📅 Daily Topics - Get conversation topics
+
 👤 **Profile:**
 • `/profile` - View/edit your profile
 • `/interests` - Set your interests
+• 😊 Set Mood - Show your current vibe
 
 📋 **General:**
 • `/help` - Show this help menu
@@ -159,6 +169,148 @@ Use the buttons below:"""
     
     SCREENSHOT_BLOCKED = "📷 **Screenshot Detected!**\n\nFor privacy protection, screenshots are not allowed in this bot. Please respect other users' privacy."
 
+# Creative Features Data
+class IceBreakers:
+    QUESTIONS = [
+        "If you could have dinner with anyone from history, who would it be?",
+        "What's the most adventurous thing you've ever done?",
+        "If you could live anywhere in the world, where would it be?",
+        "What's your favorite way to spend a weekend?",
+        "If you could have any superpower, what would it be and why?",
+        "What's the best piece of advice you've ever received?",
+        "If you could master any skill instantly, what would it be?",
+        "What's your dream job?",
+        "If you could travel back in time, which era would you visit?",
+        "What's something you're passionate about?",
+        "If you could only eat one food for the rest of your life, what would it be?",
+        "What's the coolest place you've ever visited?",
+        "If you won the lottery tomorrow, what's the first thing you'd do?",
+        "What's your favorite book or movie and why?",
+        "If you could change one thing about the world, what would it be?",
+    ]
+
+class Games:
+    WOULD_YOU_RATHER = [
+        "Would you rather: Have the ability to fly OR be invisible?",
+        "Would you rather: Time travel to the past OR to the future?",
+        "Would you rather: Live in the mountains OR by the beach?",
+        "Would you rather: Never use social media again OR never watch another movie/TV show?",
+        "Would you rather: Have unlimited money OR unlimited free time?",
+        "Would you rather: Be able to speak every language OR play every instrument?",
+        "Would you rather: Live without music OR without movies?",
+        "Would you rather: Always be 10 minutes late OR 20 minutes early?",
+        "Would you rather: Read minds OR predict the future?",
+        "Would you rather: Have a rewind button OR a pause button for your life?",
+    ]
+    
+    TRUTH_OR_DARE = {
+        'truth': [
+            "What's your biggest fear?",
+            "What's the most embarrassing thing that's happened to you?",
+            "What's your biggest regret?",
+            "Who was your first crush?",
+            "What's a secret talent you have?",
+            "What's your guilty pleasure?",
+            "What's the craziest dream you've ever had?",
+            "If you could change one thing about yourself, what would it be?",
+        ],
+        'dare': [
+            "Send a funny GIF or meme to your partner",
+            "Tell your partner a joke",
+            "Share your most unpopular opinion",
+            "Describe your perfect day",
+            "Send 5 emojis that describe you",
+            "Tell your partner a fun fact about yourself",
+            "Share your favorite song right now",
+            "Describe yourself in 3 words",
+        ]
+    }
+    
+    TWO_TRUTHS_LIE = [
+        "Share 2 truths and 1 lie about yourself - your partner has to guess the lie!",
+        "Tell your partner 3 facts about you (2 true, 1 false) and see if they can spot the lie!",
+    ]
+
+class VirtualGifts:
+    GIFTS = {
+        '🌹': 'Rose',
+        '🎁': 'Gift',
+        '⭐': 'Star',
+        '❤️': 'Heart',
+        '🍕': 'Pizza',
+        '🍰': 'Cake',
+        '☕': 'Coffee',
+        '🎵': 'Music',
+        '🌈': 'Rainbow',
+        '🔥': 'Fire',
+        '💎': 'Diamond',
+        '🏆': 'Trophy',
+        '🎨': 'Art',
+        '📚': 'Book',
+        '🌟': 'Sparkle',
+    }
+
+class Compliments:
+    LIST = [
+        "You seem like a really interesting person! 🌟",
+        "Your conversation skills are amazing! 💬",
+        "You have a great sense of humor! 😄",
+        "You're really easy to talk to! ✨",
+        "I appreciate your perspective on things! 🎯",
+        "You bring good vibes to this chat! ☀️",
+        "You're a great conversationalist! 💫",
+        "Your positivity is contagious! 🌈",
+        "You have interesting thoughts! 💭",
+        "Chatting with you is fun! 🎉",
+    ]
+
+class FunFacts:
+    FACTS = [
+        "🐙 Octopuses have three hearts!",
+        "🍯 Honey never spoils - archaeologists found 3000-year-old honey that's still edible!",
+        "🦘 Kangaroos can't walk backwards!",
+        "🌙 A day on Venus is longer than its year!",
+        "🐘 Elephants can't jump!",
+        "🦋 Butterflies taste with their feet!",
+        "🍌 Bananas are berries, but strawberries aren't!",
+        "🐌 Snails can sleep for 3 years!",
+        "⚡ Lightning is 5 times hotter than the sun!",
+        "🧠 Your brain uses 20% of your body's energy!",
+    ]
+
+class DailyTopics:
+    TOPICS = [
+        "🎬 Movies & TV Shows",
+        "🎮 Gaming & Entertainment",
+        "🌍 Travel & Adventure",
+        "🎨 Art & Creativity",
+        "📚 Books & Literature",
+        "🎵 Music & Artists",
+        "🍕 Food & Cooking",
+        "💼 Dreams & Aspirations",
+        "🏃 Sports & Fitness",
+        "🔬 Science & Technology",
+        "🌱 Nature & Environment",
+        "📸 Photography & Memories",
+        "🎭 Life Experiences",
+        "🤔 Philosophy & Deep Thoughts",
+        "😄 Funny Stories & Jokes",
+    ]
+
+class Moods:
+    OPTIONS = {
+        '😊': 'Happy',
+        '😎': 'Cool',
+        '🤔': 'Thoughtful',
+        '😴': 'Sleepy',
+        '🎉': 'Excited',
+        '😌': 'Chill',
+        '🔥': 'Energetic',
+        '💭': 'Contemplative',
+        '🌟': 'Inspired',
+        '🎵': 'Musical',
+    }
+
 class Keyboards:
     @staticmethod
     def gender_selection():
@@ -179,18 +331,63 @@ class Keyboards:
     @staticmethod
     def chat_controls():
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("⏭️ Skip Partner", callback_data='skip_chat')],
-            [InlineKeyboardButton("🛑 End Chat", callback_data='end_chat')],
+            [InlineKeyboardButton("🎮 Play Game", callback_data='games_menu'),
+             InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift')],
+            [InlineKeyboardButton("💡 Icebreaker", callback_data='icebreaker'),
+             InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
+            [InlineKeyboardButton("🎯 Fun Fact", callback_data='fun_fact'),
+             InlineKeyboardButton("📅 Daily Topic", callback_data='daily_topic')],
             [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
-            [InlineKeyboardButton("💥 Send View-Once", callback_data='send_view_once')],
+            [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
+             InlineKeyboardButton("🛑 End", callback_data='end_chat')],
             [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
         ])
+    
+    @staticmethod
+    def games_menu():
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🤔 Would You Rather", callback_data='game_wyr')],
+            [InlineKeyboardButton("🎲 Truth or Dare", callback_data='game_tod')],
+            [InlineKeyboardButton("🎭 Two Truths & A Lie", callback_data='game_ttal')],
+            [InlineKeyboardButton("🔙 Back to Chat", callback_data='back_to_chat')]
+        ])
+    
+    @staticmethod
+    def truth_or_dare():
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("✨ Truth", callback_data='tod_truth')],
+            [InlineKeyboardButton("🔥 Dare", callback_data='tod_dare')],
+            [InlineKeyboardButton("🔙 Back", callback_data='games_menu')]
+        ])
+    
+    @staticmethod
+    def virtual_gifts():
+        buttons = []
+        gifts = list(VirtualGifts.GIFTS.items())
+        for i in range(0, len(gifts), 3):
+            row = [InlineKeyboardButton(f"{emoji} {name}", callback_data=f'gift_{emoji}') 
+                   for emoji, name in gifts[i:i+3]]
+            buttons.append(row)
+        buttons.append([InlineKeyboardButton("🔙 Back to Chat", callback_data='back_to_chat')])
+        return InlineKeyboardMarkup(buttons)
+    
+    @staticmethod
+    def mood_selector():
+        buttons = []
+        moods = list(Moods.OPTIONS.items())
+        for i in range(0, len(moods), 3):
+            row = [InlineKeyboardButton(f"{emoji} {name}", callback_data=f'mood_{emoji}') 
+                   for emoji, name in moods[i:i+3]]
+            buttons.append(row)
+        buttons.append([InlineKeyboardButton("🔙 Back", callback_data='view_profile')])
+        return InlineKeyboardMarkup(buttons)
     
     @staticmethod
     def profile_menu():
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Edit Profile", callback_data='edit_profile')],
             [InlineKeyboardButton("💭 Set Interests", callback_data='set_interests')],
+            [InlineKeyboardButton("😊 Set Mood", callback_data='set_mood')],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
         ])
     
@@ -553,10 +750,12 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         
         interests = ", ".join([interest.name for interest in user.interests]) if user.interests else "None set"
         created_date = user.created_at.strftime("%B %d, %Y")
+        mood_display = f"{user.mood} {Moods.OPTIONS.get(user.mood, '')}" if user.mood else "Not set"
         
         profile_text = Messages.PROFILE_INFO.format(
             user.nickname,
             user.gender.title(),
+            mood_display,
             user.bio or "Not set",
             user.age or "Not set",
             user.location or "Not set",
@@ -671,6 +870,151 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'send_view_once':
         await handle_send_view_once_callback(query, context)
     
+    # Creative Features - Games
+    elif data == 'games_menu':
+        await query.edit_message_text(
+            "🎮 **Choose a Game to Play!**\n\nPick a game to play with your chat partner:",
+            reply_markup=Keyboards.games_menu(),
+            parse_mode='Markdown'
+        )
+    
+    elif data == 'game_wyr':
+        question = random.choice(Games.WOULD_YOU_RATHER)
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            await query.edit_message_text(f"🤔 **Would You Rather**\n\n{question}", parse_mode='Markdown')
+            await context.bot.send_message(partner_id, f"🤔 **Would You Rather**\n\n{question}", parse_mode='Markdown')
+        else:
+            await query.answer("❌ You're not in a chat!", show_alert=True)
+    
+    elif data == 'game_tod':
+        await query.edit_message_text(
+            "🎲 **Truth or Dare**\n\nChoose Truth or Dare:",
+            reply_markup=Keyboards.truth_or_dare(),
+            parse_mode='Markdown'
+        )
+    
+    elif data == 'tod_truth':
+        question = random.choice(Games.TRUTH_OR_DARE['truth'])
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            await query.edit_message_text(f"✨ **Truth**\n\n{question}", parse_mode='Markdown')
+            await context.bot.send_message(partner_id, f"✨ **Truth Question for Partner**\n\n{question}", parse_mode='Markdown')
+        else:
+            await query.answer("❌ You're not in a chat!", show_alert=True)
+    
+    elif data == 'tod_dare':
+        dare = random.choice(Games.TRUTH_OR_DARE['dare'])
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            await query.edit_message_text(f"🔥 **Dare**\n\n{dare}", parse_mode='Markdown')
+            await context.bot.send_message(partner_id, f"🔥 **Dare for Partner**\n\n{dare}", parse_mode='Markdown')
+        else:
+            await query.answer("❌ You're not in a chat!", show_alert=True)
+    
+    elif data == 'game_ttal':
+        instruction = random.choice(Games.TWO_TRUTHS_LIE)
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            await query.edit_message_text(f"🎭 **Two Truths & A Lie**\n\n{instruction}", parse_mode='Markdown')
+            await context.bot.send_message(partner_id, f"🎭 **Two Truths & A Lie**\n\n{instruction}", parse_mode='Markdown')
+        else:
+            await query.answer("❌ You're not in a chat!", show_alert=True)
+    
+    # Creative Features - Social
+    elif data == 'icebreaker':
+        question = random.choice(IceBreakers.QUESTIONS)
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            await query.answer("💡 Icebreaker sent!")
+            await context.bot.send_message(user_id, f"💡 **Icebreaker Question**\n\n{question}", parse_mode='Markdown')
+            await context.bot.send_message(partner_id, f"💡 **Icebreaker Question**\n\n{question}", parse_mode='Markdown')
+        else:
+            await query.answer("❌ You're not in a chat!", show_alert=True)
+    
+    elif data == 'send_compliment':
+        compliment = random.choice(Compliments.LIST)
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            with database.get_db() as db:
+                user = database.get_user(db, user_id)
+                if user:
+                    await query.answer("💬 Compliment sent!")
+                    await context.bot.send_message(partner_id, f"💬 **{user.nickname} sent you a compliment:**\n\n{compliment}", parse_mode='Markdown')
+        else:
+            await query.answer("❌ You're not in a chat!", show_alert=True)
+    
+    elif data == 'fun_fact':
+        fact = random.choice(FunFacts.FACTS)
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            await query.answer("🎯 Fun fact sent!")
+            await context.bot.send_message(user_id, f"🎯 **Fun Fact**\n\n{fact}", parse_mode='Markdown')
+            await context.bot.send_message(partner_id, f"🎯 **Fun Fact**\n\n{fact}", parse_mode='Markdown')
+        else:
+            await query.answer("❌ You're not in a chat!", show_alert=True)
+    
+    elif data == 'daily_topic':
+        topic = random.choice(DailyTopics.TOPICS)
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            await query.answer("📅 Topic sent!")
+            await context.bot.send_message(user_id, f"📅 **Today's Topic**\n\nLet's talk about: {topic}", parse_mode='Markdown')
+            await context.bot.send_message(partner_id, f"📅 **Today's Topic**\n\nLet's talk about: {topic}", parse_mode='Markdown')
+        else:
+            await query.answer("❌ You're not in a chat!", show_alert=True)
+    
+    elif data == 'send_gift':
+        await query.edit_message_text(
+            "🎁 **Send a Virtual Gift**\n\nChoose a gift to send to your partner:",
+            reply_markup=Keyboards.virtual_gifts(),
+            parse_mode='Markdown'
+        )
+    
+    elif data.startswith('gift_'):
+        emoji = data.replace('gift_', '')
+        gift_name = VirtualGifts.GIFTS.get(emoji, 'Gift')
+        partner_id = matchmaking.get_partner(user_id)
+        if partner_id:
+            with database.get_db() as db:
+                user = database.get_user(db, user_id)
+                if user:
+                    await query.answer("🎁 Gift sent!")
+                    await context.bot.send_message(
+                        partner_id, 
+                        f"🎁 **{user.nickname} sent you a {gift_name}!** {emoji}",
+                        parse_mode='Markdown'
+                    )
+                    await query.edit_message_text(
+                        f"✅ You sent a {gift_name} {emoji} to your partner!",
+                        parse_mode='Markdown'
+                    )
+        else:
+            await query.answer("❌ You're not in a chat!", show_alert=True)
+    
+    # Mood System
+    elif data == 'set_mood':
+        await query.edit_message_text(
+            "😊 **Set Your Mood**\n\nChoose your current mood:",
+            reply_markup=Keyboards.mood_selector(),
+            parse_mode='Markdown'
+        )
+    
+    elif data.startswith('mood_'):
+        emoji = data.replace('mood_', '')
+        mood_name = Moods.OPTIONS.get(emoji, 'Unknown')
+        with database.get_db() as db:
+            user = database.get_user(db, user_id)
+            if user:
+                user.mood = emoji
+                db.commit()
+                await query.answer(f"Mood set to {mood_name} {emoji}!")
+                await query.edit_message_text(
+                    f"✅ **Mood Updated!**\n\nYour mood is now: {mood_name} {emoji}",
+                    reply_markup=Keyboards.profile_menu(),
+                    parse_mode='Markdown'
+                )
+    
     # Search controls
     elif data == 'stop_search':
         await handle_stop_search_callback(query, context)
@@ -767,10 +1111,12 @@ async def show_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
         
         interests = ", ".join([interest.name for interest in user.interests]) if user.interests else "None set"
         created_date = user.created_at.strftime("%B %d, %Y")
+        mood_display = f"{user.mood} {Moods.OPTIONS.get(user.mood, '')}" if user.mood else "Not set"
         
         profile_text = Messages.PROFILE_INFO.format(
             user.nickname,
             user.gender.title(),
+            mood_display,
             user.bio or "Not set",
             user.age or "Not set",
             user.location or "Not set",

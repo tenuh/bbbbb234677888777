@@ -39,6 +39,7 @@ class User(Base):
     bio = Column(Text, nullable=True)
     age = Column(Integer, nullable=True)
     location = Column(String(100), nullable=True)
+    mood = Column(String(50), nullable=True)  # User's current mood emoji
     interests = relationship("Interest", secondary=user_interests, back_populates="users")
     total_chats = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)

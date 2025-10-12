@@ -85,7 +85,7 @@ def main():
     
     # Ensure URL has https://
     if not vercel_url.startswith('http'):
-        vercel_url = f"https://bbbbb234677888777.vercel.app"
+        vercel_url = f"https://{vercel_url}"
     
     # Add webhook endpoint
     webhook_url = f"{vercel_url}/api/webhook"

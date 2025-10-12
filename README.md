@@ -65,12 +65,14 @@ A feature-rich anonymous chat bot built with Python and the Telegram Bot API. Co
 
 ## 🚀 Deployment
 
-For production deployment, see the **[DEPLOYMENT.md](DEPLOYMENT.md)** guide which covers:
+For production deployment, we have detailed guides for each platform:
 
-- ✅ **Replit** (Recommended - Easiest)
-- ✅ **Railway** (Great for production)
-- ✅ **Heroku** (Classic choice)
-- ❌ **Vercel** (Not recommended for this bot)
+- ✅ **[Replit](DEPLOYMENT.md#replit-deployment)** - Easiest, recommended for beginners
+- ✅ **[Railway](DEPLOYMENT.md#railway-deployment)** - Great for production
+- ✅ **[Heroku](DEPLOYMENT.md#heroku-deployment)** - Classic choice
+- ✅ **[Vercel](VERCEL_DEPLOYMENT.md)** - Serverless deployment (webhook mode)
+
+### Quick Deploy Options:
 
 **Quick Deploy:** Click the buttons below:
 

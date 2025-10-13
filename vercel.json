@@ -2,6 +2,10 @@
   "version": 2,
   "builds": [
     {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    },
+    {
       "src": "api/webhook.py",
       "use": "@vercel/python"
     }
@@ -12,8 +16,12 @@
       "dest": "api/webhook.py"
     },
     {
+      "src": "/",
+      "dest": "api/index.py"
+    },
+    {
       "src": "/(.*)",
-      "dest": "api/webhook.py"
+      "dest": "api/index.py"
     }
   ]
 }

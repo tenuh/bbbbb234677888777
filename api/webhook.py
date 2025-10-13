@@ -91,8 +91,13 @@ class handler(BaseHTTPRequestHandler):
             
             update = Update.de_json(update_data, application.bot)
             
-            # Process update asynchronously
-            asyncio.run(application.process_update(update))
+            # Initialize and process update asynchronously
+            async def process():
+                await application.initialize()
+                await application.process_update(update)
+                await application.shutdown()
+            
+            asyncio.run(process())
             
             # Send success response
             self.send_response(200)

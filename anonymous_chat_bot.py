@@ -1430,6 +1430,10 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
 # Message Handler
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle all text messages"""
+    # Safety check for message
+    if not update.message or not update.message.text:
+        return
+    
     user_id = update.effective_user.id
     message_text = update.message.text
     
@@ -1643,6 +1647,10 @@ async def handle_profile_editing(update: Update, context: ContextTypes.DEFAULT_T
 # Photo handler
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle photo messages"""
+    # Safety check for message
+    if not update.message:
+        return
+    
     user_id = update.effective_user.id
     
     # Check if user is sending a view-once photo

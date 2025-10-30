@@ -1,0 +1,5 @@
+[phases.setup]
+nixPkgs = ["postgresql"]
+
+[start]
+cmd = "python anonymous_chat_bot.py"

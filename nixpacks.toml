@@ -1,16 +1,11 @@
 # Nixpacks configuration for Railway - Python Telegram Bot
-# This fixes "python: command not found" error
+# Fix for "pip: command not found" error
 
 providers = ["python"]
 
-[phases.setup]
-nixPkgs = ["python311"]
-
-[phases.install]
-cmds = ["pip install -r requirements.txt"]
-
 [start]
-cmd = "python3 anonymous_chat_bot.py"
+cmd = "python anonymous_chat_bot.py"
 
 [variables]
 PYTHONUNBUFFERED = "1"
+NIXPACKS_PYTHON_VERSION = "3.11"

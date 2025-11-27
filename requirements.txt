@@ -8,3 +8,8 @@ python-telegram-bot[job-queue]
 requests
 sqlalchemy
 telegram
+psycopg2-binary
+python-dotenv
+python-telegram-bot[job-queue]
+requests
+sqlalchemy

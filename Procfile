@@ -1,1 +1,1 @@
-worker: python anonymous_chat_bot.py
+worker: python3 anonymous_chat_bot.py

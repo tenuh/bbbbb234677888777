@@ -861,6 +861,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data.startswith('edit_'):
         await handle_profile_edit_callback(query, context)
     
+    elif data.startswith('change_gender_'):
+        await handle_change_gender_callback(query, context)
+    
     elif data == 'view_partner_profile':
         await handle_view_partner_profile_callback(query, context)
     
@@ -1135,6 +1138,8 @@ async def show_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
 async def handle_edit_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle edit profile button callback"""
     edit_menu = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎭 Change Nickname", callback_data='edit_nickname')],
+        [InlineKeyboardButton("👤 Change Gender", callback_data='edit_gender')],
         [InlineKeyboardButton("📝 Edit Bio", callback_data='edit_bio')],
         [InlineKeyboardButton("🎂 Edit Age", callback_data='edit_age')],
         [InlineKeyboardButton("📍 Edit Location", callback_data='edit_location')],
@@ -1180,6 +1185,45 @@ async def handle_profile_edit_callback(query, context: ContextTypes.DEFAULT_TYPE
             parse_mode='Markdown'
         )
         context.user_data['editing_state'] = 'location'
+    
+    elif data == 'edit_nickname':
+        await query.edit_message_text(
+            "🎭 **Change Nickname**\n\nEnter your new nickname (2-20 characters):",
+            parse_mode='Markdown'
+        )
+        context.user_data['editing_state'] = 'nickname'
+    
+    elif data == 'edit_gender':
+        gender_menu = InlineKeyboardMarkup([
+            [InlineKeyboardButton("👨 Male", callback_data='change_gender_male')],
+            [InlineKeyboardButton("👩 Female", callback_data='change_gender_female')],
+            [InlineKeyboardButton("🔙 Back", callback_data='edit_profile')]
+        ])
+        await query.edit_message_text(
+            "👤 **Change Gender**\n\nSelect your gender:",
+            reply_markup=gender_menu,
+            parse_mode='Markdown'
+        )
+
+async def handle_change_gender_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle gender change callback"""
+    user_id = query.from_user.id
+    gender = query.data.replace('change_gender_', '')
+    
+    with database.get_db() as db:
+        success = database.update_user_profile(db, user_id, 'gender', gender)
+        if success:
+            db.commit()
+            await query.edit_message_text(
+                f"✅ Gender updated to **{gender.title()}**!",
+                reply_markup=Keyboards.profile_menu(),
+                parse_mode='Markdown'
+            )
+        else:
+            await query.edit_message_text(
+                "❌ Failed to update gender. Please try again.",
+                reply_markup=Keyboards.profile_menu()
+            )
 
 async def handle_view_partner_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle view partner profile during chat"""
@@ -1632,6 +1676,15 @@ async def handle_profile_editing(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text("❌ Maximum 10 interests allowed. Try again:")
                 return
             success = database.set_user_interests(db, user_id, interests)
+        
+        elif editing_state == 'nickname':
+            if len(message_text) < 2 or len(message_text) > 20:
+                await update.message.reply_text("❌ Nickname must be 2-20 characters. Try again:")
+                return
+            success = database.update_user_profile(db, user_id, 'nickname', message_text)
+            if not success:
+                await update.message.reply_text("❌ This nickname is already taken or invalid. Try a different one:")
+                return
         
         if success:
             db.commit()

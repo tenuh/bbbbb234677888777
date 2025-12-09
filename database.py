@@ -240,6 +240,22 @@ def update_user_profile(db, user_id: int, field: str, value):
                 return False
         elif field == 'location':
             user.location = value
+        elif field == 'gender':
+            if value in ['male', 'female']:
+                user.gender = value
+            else:
+                return False
+        elif field == 'nickname':
+            if len(value) >= 2 and len(value) <= 20:
+                existing = db.query(User).filter(
+                    User.nickname == value,
+                    User.user_id != user_id
+                ).first()
+                if existing:
+                    return False
+                user.nickname = value
+            else:
+                return False
         
         user.last_active = datetime.utcnow()
         db.flush()

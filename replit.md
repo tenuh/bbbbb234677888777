@@ -12,47 +12,7 @@ This is a completely rewritten Python-based Telegram bot that facilitates anonym
 - ✅ Enhanced privacy and security features
 - ✅ Comprehensive button navigation system
 
-## Latest Update (December 10, 2025) ✨
-### NEW FEATURES ADDED:
-1. **🌐 Multi-Language Support**:
-   - English and Sinhala (සිංහල) language options
-   - Language selection in main menu
-   - Persistent language preference per user
-
-2. **📧 Contact Developer System**:
-   - Users can send messages to developer/admin
-   - All messages viewable in admin panel
-   - Message read/unread status tracking
-
-3. **🔇 Admin Mute System**:
-   - Admin can mute users in chat
-   - Muted users' messages don't reach their partner
-   - User is NOT notified when muted (silent moderation)
-
-4. **🎭 Sticker Support**:
-   - Full sticker forwarding between chat partners
-   - Protected content mode for stickers
-
-5. **📷 View-Once Photo Admin Monitoring**:
-   - View-once photos are automatically forwarded to admin
-   - Silent monitoring without user notification
-
-6. **🗑️ Auto-Delete Panels**:
-   - Search panel auto-deletes when connected
-   - Connected panel auto-deletes when chat ends
-
-7. **📢 Broadcast Improvements**:
-   - Broadcast auto-ends after sending
-   - Returns to admin panel after completion
-
-### UI IMPROVEMENTS:
-- Removed Games and Icebreaker buttons from chat controls
-- Added Contact Developer option in main menu
-- Added Language selection in main menu
-- Added User Messages viewer in admin panel
-- Added Muted Users management in admin panel
-
-## Previous Update (October 12, 2025) ✨
+## Latest Update (October 12, 2025) ✨
 ### NEW CREATIVE FEATURES ADDED:
 1. **🎮 Interactive Games System**:
    - Would You Rather - Fun choice-based questions

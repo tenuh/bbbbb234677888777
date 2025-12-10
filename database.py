@@ -49,7 +49,6 @@ class User(Base):
     age = Column(Integer, nullable=True)
     location = Column(String(100), nullable=True)
     mood = Column(String(50), nullable=True)  # User's current mood emoji
-    language = Column(String(10), default='en')  # User's preferred language: 'en' or 'si'
     interests = relationship("Interest", secondary=user_interests, back_populates="users")
     total_chats = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -120,32 +119,6 @@ class BroadcastMessage(Base):
     failed_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
-
-class DeveloperMessage(Base):
-    """Messages from users to developer/admin"""
-    __tablename__ = 'developer_messages'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
-    message = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    is_read = Column(Boolean, default=False)
-    read_at = Column(DateTime, nullable=True)
-    
-    user = relationship("User", foreign_keys=[user_id])
-
-class MutedUser(Base):
-    """Users muted by admin in chat - their messages won't reach partner"""
-    __tablename__ = 'muted_users'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
-    muted_by = Column(BigInteger, nullable=False)  # Admin ID
-    reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    is_active = Column(Boolean, default=True)
-    
-    user = relationship("User", foreign_keys=[user_id])
 
 @contextmanager
 def get_db():
@@ -402,88 +375,3 @@ def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count:
         broadcast.failed_count = failed_count
         broadcast.completed_at = datetime.utcnow()
         db.flush()
-
-def create_developer_message(db, user_id: int, message: str) -> DeveloperMessage:
-    """Create a message from user to developer"""
-    dev_msg = DeveloperMessage(
-        user_id=user_id,
-        message=message
-    )
-    db.add(dev_msg)
-    db.flush()
-    return dev_msg
-
-def get_unread_developer_messages(db) -> List[DeveloperMessage]:
-    """Get all unread developer messages"""
-    return db.query(DeveloperMessage).filter(
-        DeveloperMessage.is_read == False
-    ).order_by(DeveloperMessage.created_at.desc()).all()
-
-def get_all_developer_messages(db, limit: int = 20) -> List[DeveloperMessage]:
-    """Get all developer messages"""
-    return db.query(DeveloperMessage).order_by(
-        DeveloperMessage.created_at.desc()
-    ).limit(limit).all()
-
-def mark_developer_message_read(db, message_id: int):
-    """Mark a developer message as read"""
-    msg = db.query(DeveloperMessage).filter(DeveloperMessage.id == message_id).first()
-    if msg:
-        msg.is_read = True
-        msg.read_at = datetime.utcnow()
-        db.flush()
-
-def mute_user(db, user_id: int, admin_id: int, reason: Optional[str] = None) -> MutedUser:
-    """Mute a user - their messages won't reach partner"""
-    existing = db.query(MutedUser).filter(
-        MutedUser.user_id == user_id,
-        MutedUser.is_active == True
-    ).first()
-    if existing:
-        return existing
-    
-    muted = MutedUser(
-        user_id=user_id,
-        muted_by=admin_id,
-        reason=reason
-    )
-    db.add(muted)
-    db.flush()
-    return muted
-
-def unmute_user(db, user_id: int):
-    """Unmute a user"""
-    muted = db.query(MutedUser).filter(
-        MutedUser.user_id == user_id,
-        MutedUser.is_active == True
-    ).first()
-    if muted:
-        muted.is_active = False
-        db.flush()
-
-def is_user_muted(db, user_id: int) -> bool:
-    """Check if user is muted"""
-    return db.query(MutedUser).filter(
-        MutedUser.user_id == user_id,
-        MutedUser.is_active == True
-    ).first() is not None
-
-def get_muted_users(db) -> List[MutedUser]:
-    """Get all muted users"""
-    return db.query(MutedUser).filter(
-        MutedUser.is_active == True
-    ).order_by(MutedUser.created_at.desc()).all()
-
-def update_user_language(db, user_id: int, language: str) -> bool:
-    """Update user's preferred language"""
-    user = get_user(db, user_id)
-    if user and language in ['en', 'si']:
-        user.language = language
-        db.flush()
-        return True
-    return False
-
-def get_user_language(db, user_id: int) -> str:
-    """Get user's preferred language"""
-    user = get_user(db, user_id)
-    return user.language if user and user.language else 'en'

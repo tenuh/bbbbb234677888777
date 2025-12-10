@@ -13,3 +13,8 @@ python-dotenv
 python-telegram-bot[job-queue]
 requests
 sqlalchemy
+psycopg2-binary
+python-dotenv
+python-telegram-bot[job-queue]
+requests
+sqlalchemy

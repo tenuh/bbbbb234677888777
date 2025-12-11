@@ -331,12 +331,8 @@ class Keyboards:
     @staticmethod
     def chat_controls():
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎮 Play Game", callback_data='games_menu'),
-             InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift')],
-            [InlineKeyboardButton("💡 Icebreaker", callback_data='icebreaker'),
+            [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
              InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
-            [InlineKeyboardButton("🎯 Fun Fact", callback_data='fun_fact'),
-             InlineKeyboardButton("📅 Daily Topic", callback_data='daily_topic')],
             [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
             [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
              InlineKeyboardButton("🛑 End", callback_data='end_chat')],
@@ -1576,6 +1572,7 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
     
     await update.message.reply_text(
         f"✅ **Broadcast Complete**\n\n📤 Sent: {sent_count}\n❌ Failed: {failed_count}",
+        reply_markup=Keyboards.admin_panel(),
         parse_mode='Markdown'
     )
     

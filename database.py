@@ -45,6 +45,7 @@ class User(Base):
     last_name = Column(String(255), nullable=True)
     gender = Column(String(10), nullable=False)  # 'male' or 'female'
     nickname = Column(String(100), nullable=False)
+    language = Column(String(10), default='en')  # 'en' or 'si' (Sinhala)
     bio = Column(Text, nullable=True)
     age = Column(Integer, nullable=True)
     location = Column(String(100), nullable=True)
@@ -254,6 +255,11 @@ def update_user_profile(db, user_id: int, field: str, value):
                 if existing:
                     return False
                 user.nickname = value
+            else:
+                return False
+        elif field == 'language':
+            if value in ['en', 'si']:
+                user.language = value
             else:
                 return False
         

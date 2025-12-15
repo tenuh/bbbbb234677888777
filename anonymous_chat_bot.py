@@ -52,6 +52,121 @@ if not TOKEN:
 PROFILE_NAME, PROFILE_AGE, PROFILE_BIO, PROFILE_LOCATION, PROFILE_INTERESTS = range(5)
 ADMIN_BROADCAST_MESSAGE, ADMIN_BAN_USER, ADMIN_UNBAN_USER = range(3)
 
+# Translations
+TRANSLATIONS = {
+    'en': {
+        'WELCOME': """🎭 **Welcome to Anonymous Chat Bot!**
+
+Connect with people around the world anonymously and safely.
+
+Choose your gender to get started:""",
+        'LANG_SELECT': """🌐 **Select Language**
+
+Choose your preferred language:""",
+        'LANG_CHANGED': "✅ Language changed to English!",
+        'MALE': "👨 Male",
+        'FEMALE': "👩 Female",
+        'FIND_PARTNER': "🔍 Find Partner",
+        'MY_PROFILE': "👤 My Profile",
+        'HELP': "❓ Help",
+        'SETTINGS': "⚙️ Settings",
+        'LANGUAGE': "🌐 Language",
+        'SKIP': "⏭️ Skip",
+        'STOP': "⏹️ Stop Chat",
+        'REPORT': "🚨 Report",
+        'GAMES': "🎮 Games",
+        'GIFTS': "🎁 Gifts",
+        'ICEBREAKER': "💡 Icebreaker",
+        'BACK': "🔙 Back",
+        'CANCEL': "❌ Cancel",
+        'ALREADY_IN_CHAT': "❌ You're already in a chat! Use the buttons below to manage your session.",
+        'ALREADY_WAITING': "⏳ You're already in the matching queue. Please wait...",
+        'GENDER_SET': """✅ **Profile Created!**
+
+🎭 **Nickname:** {}
+👤 **Gender:** {}
+
+Your profile is ready! Use the menu below to start chatting or customize your profile further.""",
+        'CHAT_ENDED': "💬 Chat session ended. Use /start or the menu to begin a new chat!",
+        'CHAT_ENDED_BY_PARTNER': "😔 Your chat partner ended the session.",
+        'NOT_IN_CHAT': "❌ You're not in a chat session. Use /start to begin!",
+        'SKIPPED_CHAT': "⏭️ Searching for a new chat partner...",
+        'PARTNER_SKIPPED': "💔 Your partner found someone new. Let's find you a new partner!",
+        'REPORT_SENT': "✅ Report submitted successfully. We'll review this. The chat has been ended.",
+        'REPORT_ONLY_IN_CHAT': "⚠️ You can only report users during an active chat.",
+        'MATCHING_STARTED': "🔍 **Searching for a chat partner...**\n\nWe're looking for someone to chat with. Use the buttons below to control your search.",
+        'PARTNER_FOUND': "🎉 **Connected with {}!** \n\nStart chatting now. Be respectful and have fun!",
+        'NO_PARTNER_FOUND': "😔 **No chat partner found right now.**\n\nThere might not be anyone available at the moment. Try refreshing or check back later!",
+        'SEARCH_STOPPED': "⏹️ **Search stopped.**\n\nYou can start a new search anytime using the menu below.",
+        'PROFILE_UPDATED': "✅ Profile updated successfully!",
+        'WARNING_MESSAGE': "⚠️ **Content Warning**\n\nYour message may contain inappropriate content. Please be respectful in your conversations.",
+        'REFRESH': "🔄 Refresh",
+        'STOP_SEARCH': "⏹️ Stop Search",
+    },
+    'si': {
+        'WELCOME': """🎭 **නිර්නාමික චැට් බොට් වෙත සාදරයෙන් පිළිගනිමු!**
+
+ලොව පුරා සිටින අය සමඟ නිර්නාමිකව සහ ආරක්ෂිතව සම්බන්ධ වන්න.
+
+ආරම්භ කිරීමට ඔබේ ස්ත්‍රී පුරුෂ භාවය තෝරන්න:""",
+        'LANG_SELECT': """🌐 **භාෂාව තෝරන්න**
+
+ඔබේ කැමති භාෂාව තෝරන්න:""",
+        'LANG_CHANGED': "✅ භාෂාව සිංහල වෙත වෙනස් කරන ලදී!",
+        'MALE': "👨 පිරිමි",
+        'FEMALE': "👩 ගැහැණු",
+        'FIND_PARTNER': "🔍 සහකරු සොයන්න",
+        'MY_PROFILE': "👤 මගේ පැතිකඩ",
+        'HELP': "❓ උදව්",
+        'SETTINGS': "⚙️ සැකසුම්",
+        'LANGUAGE': "🌐 භාෂාව",
+        'SKIP': "⏭️ මඟහරින්න",
+        'STOP': "⏹️ චැට් නවත්වන්න",
+        'REPORT': "🚨 වාර්තා කරන්න",
+        'GAMES': "🎮 ක්‍රීඩා",
+        'GIFTS': "🎁 තෑගි",
+        'ICEBREAKER': "💡 අයිස් බ්‍රේකර්",
+        'BACK': "🔙 ආපසු",
+        'CANCEL': "❌ අවලංගු කරන්න",
+        'ALREADY_IN_CHAT': "❌ ඔබ දැනටමත් චැට් එකක සිටී! ඔබේ සැසිය කළමනාකරණය කිරීමට පහත බොත්තම් භාවිතා කරන්න.",
+        'ALREADY_WAITING': "⏳ ඔබ දැනටමත් පෙළගැස්මේ සිටී. කරුණාකර රැඳී සිටින්න...",
+        'GENDER_SET': """✅ **පැතිකඩ සාදන ලදී!**
+
+🎭 **අන්වර්ථ නාමය:** {}
+👤 **ස්ත්‍රී පුරුෂ භාවය:** {}
+
+ඔබේ පැතිකඩ සූදානම්! චැට් කිරීම ආරම්භ කිරීමට හෝ ඔබේ පැතිකඩ වැඩිදුරටත් අභිරුචිකරණය කිරීමට පහත මෙනුව භාවිතා කරන්න.""",
+        'CHAT_ENDED': "💬 චැට් සැසිය අවසන් විය. නව චැට් එකක් ආරම්භ කිරීමට /start හෝ මෙනුව භාවිතා කරන්න!",
+        'CHAT_ENDED_BY_PARTNER': "😔 ඔබේ චැට් සහකරු සැසිය අවසන් කළේය.",
+        'NOT_IN_CHAT': "❌ ඔබ චැට් සැසියක නැත. ආරම්භ කිරීමට /start භාවිතා කරන්න!",
+        'SKIPPED_CHAT': "⏭️ නව චැට් සහකරුවෙකු සොයමින්...",
+        'PARTNER_SKIPPED': "💔 ඔබේ සහකරු අලුත් කෙනෙකු සොයාගත්තා. අපි ඔබට නව සහකරුවෙකු සොයමු!",
+        'REPORT_SENT': "✅ වාර්තාව සාර්ථකව ඉදිරිපත් කරන ලදී. අපි මෙය සමාලෝචනය කරන්නෙමු. චැට් එක අවසන් කර ඇත.",
+        'REPORT_ONLY_IN_CHAT': "⚠️ ඔබට ක්‍රියාකාරී චැට් එකක් තුළ පමණක් පරිශීලකයින් වාර්තා කළ හැක.",
+        'MATCHING_STARTED': "🔍 **චැට් සහකරුවෙකු සොයමින්...**\n\nඅපි චැට් කිරීමට යමෙකු සොයමින් සිටිමු. ඔබේ සෙවුම පාලනය කිරීමට පහත බොත්තම් භාවිතා කරන්න.",
+        'PARTNER_FOUND': "🎉 **{} සමඟ සම්බන්ධ විය!** \n\nදැන් චැට් කිරීම ආරම්භ කරන්න. ගෞරවාන්විතව සිට විනෝද වන්න!",
+        'NO_PARTNER_FOUND': "😔 **මේ මොහොතේ චැට් සහකරුවෙකු හමු නොවීය.**\n\nදැන් කිසිවෙකු නොතිබිය හැක. නැවුම් කිරීමට උත්සාහ කරන්න හෝ පසුව නැවත පරීක්ෂා කරන්න!",
+        'SEARCH_STOPPED': "⏹️ **සෙවීම නතර විය.**\n\nඔබට ඕනෑම වේලාවක පහත මෙනුව භාවිතයෙන් නව සෙවීමක් ආරම්භ කළ හැක.",
+        'PROFILE_UPDATED': "✅ පැතිකඩ සාර්ථකව යාවත්කාලීන කරන ලදී!",
+        'WARNING_MESSAGE': "⚠️ **අන්තර්ගත අනතුරු ඇඟවීම**\n\nඔබේ පණිවිඩයේ නුසුදුසු අන්තර්ගතයක් අඩංගු විය හැක. කරුණාකර ඔබේ සංවාදවල ගෞරවාන්විතව සිටින්න.",
+        'REFRESH': "🔄 නැවුම් කරන්න",
+        'STOP_SEARCH': "⏹️ සෙවීම නවත්වන්න",
+    }
+}
+
+def get_text(key: str, lang: str = 'en') -> str:
+    """Get translated text for given key and language"""
+    if lang not in TRANSLATIONS:
+        lang = 'en'
+    return TRANSLATIONS.get(lang, TRANSLATIONS['en']).get(key, TRANSLATIONS['en'].get(key, key))
+
+def get_user_lang(db, user_id: int) -> str:
+    """Get user's preferred language from database"""
+    user = database.get_user(db, user_id)
+    if user and user.language:
+        return user.language
+    return 'en'
+
 # Messages and UI
 class Messages:
     WELCOME = """🎭 **Welcome to Anonymous Chat Bot!**
@@ -384,7 +499,16 @@ class Keyboards:
             [InlineKeyboardButton("✏️ Edit Profile", callback_data='edit_profile')],
             [InlineKeyboardButton("💭 Set Interests", callback_data='set_interests')],
             [InlineKeyboardButton("😊 Set Mood", callback_data='set_mood')],
+            [InlineKeyboardButton("🌐 Language", callback_data='change_language')],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
+        ])
+    
+    @staticmethod
+    def language_selection():
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🇬🇧 English", callback_data='lang_en')],
+            [InlineKeyboardButton("🇱🇰 සිංහල (Sinhala)", callback_data='lang_si')],
+            [InlineKeyboardButton("🔙 Back", callback_data='view_profile')]
         ])
     
     @staticmethod
@@ -1013,6 +1137,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     reply_markup=Keyboards.profile_menu(),
                     parse_mode='Markdown'
                 )
+    
+    # Language Selection
+    elif data == 'change_language':
+        await query.edit_message_text(
+            get_text('LANG_SELECT', 'en'),
+            reply_markup=Keyboards.language_selection(),
+            parse_mode='Markdown'
+        )
+    
+    elif data.startswith('lang_'):
+        lang_code = data.replace('lang_', '')
+        with database.get_db() as db:
+            database.update_user_profile(db, user_id, 'language', lang_code)
+            db.commit()
+            await query.answer(get_text('LANG_CHANGED', lang_code))
+            await query.edit_message_text(
+                get_text('LANG_CHANGED', lang_code),
+                reply_markup=Keyboards.profile_menu(),
+                parse_mode='Markdown'
+            )
     
     # Search controls
     elif data == 'stop_search':

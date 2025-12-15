@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Set
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -136,10 +136,36 @@ def get_db():
         db.close()
 
 def init_database():
-    """Initialize database tables"""
+    """Initialize database tables and add missing columns"""
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
+        
+        # Add missing columns to existing tables (for migrations)
+        with engine.connect() as conn:
+            # Check and add missing columns to users table
+            missing_columns = [
+                ("language", "VARCHAR(10) DEFAULT 'en'"),
+                ("bio", "TEXT"),
+                ("age", "INTEGER"),
+                ("location", "VARCHAR(100)"),
+                ("mood", "VARCHAR(50)"),
+                ("total_chats", "INTEGER DEFAULT 0"),
+                ("reported_count", "INTEGER DEFAULT 0"),
+                ("is_banned", "BOOLEAN DEFAULT FALSE"),
+                ("ban_reason", "TEXT"),
+                ("ban_date", "TIMESTAMP"),
+                ("banned_by", "BIGINT"),
+            ]
+            
+            for col_name, col_type in missing_columns:
+                try:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    conn.commit()
+                except Exception:
+                    pass  # Column might already exist or other issue
+            
+            logger.info("Database migration completed successfully")
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
         raise

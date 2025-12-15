@@ -23,12 +23,12 @@ args = "Telegram Bot (Dev)"
 name = "Telegram Bot (Dev)"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"Bot stopped - Running on Railway. To test locally, edit this workflow.\""
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"Bot code updated - Deploy to Railway to apply fixes\""
 
 [deployment]
 deploymentTarget = "vm"

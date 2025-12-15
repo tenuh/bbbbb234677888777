@@ -1364,11 +1364,23 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
     data = query.data
     
     if data == 'admin_broadcast':
+        cancel_keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ Cancel Broadcast", callback_data='admin_broadcast_cancel')]
+        ])
         await query.edit_message_text(
             "📢 **Broadcast Message**\n\nSend your message now. It will be sent to all users:",
+            reply_markup=cancel_keyboard,
             parse_mode='Markdown'
         )
         context.user_data['admin_state'] = 'awaiting_broadcast'
+    
+    elif data == 'admin_broadcast_cancel':
+        context.user_data.pop('admin_state', None)
+        await query.edit_message_text(
+            "❌ Broadcast cancelled.",
+            reply_markup=Keyboards.admin_panel(),
+            parse_mode='Markdown'
+        )
     
     elif data == 'admin_stats':
         with database.get_db() as db:
@@ -1798,6 +1810,30 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 reply_markup=Keyboards.main_menu()
             )
 
+async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle sticker messages"""
+    if not update.message or not update.message.sticker:
+        return
+    
+    user_id = update.effective_user.id
+    
+    partner_id = matchmaking.get_partner(user_id)
+    if partner_id:
+        try:
+            await context.bot.send_sticker(
+                partner_id,
+                update.message.sticker.file_id,
+                protect_content=True
+            )
+        except TelegramError as e:
+            logger.error(f"Failed to forward sticker: {e}")
+            await update.message.reply_text("❌ Failed to send sticker. Your partner may have left.")
+    else:
+        await update.message.reply_text(
+            "🎨 To send stickers, you need to be in an active chat.",
+            reply_markup=Keyboards.main_menu()
+        )
+
 async def handle_admin_ban_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle admin ban reason input"""
     reason = update.message.text.strip()
@@ -1922,6 +1958,7 @@ def main() -> None:
     
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Set bot commands

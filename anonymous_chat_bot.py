@@ -2132,9 +2132,16 @@ def main() -> None:
             await startup()
         application.post_init = post_init
     
-    # Start polling
+    # Add error handler
+    async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Log errors caused by updates."""
+        logger.error(f"Exception while handling an update: {context.error}")
+    
+    application.add_error_handler(error_handler)
+    
+    # Start polling (drop pending updates to avoid conflicts with other instances)
     logger.info("Bot started successfully")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()

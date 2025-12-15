@@ -12,7 +12,22 @@ This is a completely rewritten Python-based Telegram bot that facilitates anonym
 - ✅ Enhanced privacy and security features
 - ✅ Comprehensive button navigation system
 
-## Latest Update (October 12, 2025) ✨
+## Latest Update (December 15, 2025) ✨
+### NEW FEATURES:
+1. **🌐 Language Selection (Sinhala & English)**:
+   - Users can select language from Profile menu
+   - Sinhala translations added for key messages
+   - Language preference saved in database
+
+2. **🎨 Sticker Support**:
+   - Stickers now forward to chat partners
+   - Protected content enabled for stickers
+
+3. **📢 Improved Admin Broadcast**:
+   - Added Cancel Broadcast button
+   - Better broadcast flow management
+
+## Previous Update (October 12, 2025) ✨
 ### NEW CREATIVE FEATURES ADDED:
 1. **🎮 Interactive Games System**:
    - Would You Rather - Fun choice-based questions

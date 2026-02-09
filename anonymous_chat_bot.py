@@ -215,7 +215,6 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
 🎂 **Age:** {}
 📍 **Location:** {}
 💭 **Interests:** {}
-📊 **Total Chats:** {}
 📅 **Member Since:** {}"""
     
     WARNING_MESSAGE = "⚠️ **Content Warning**\n\nYour message may contain inappropriate content. Please be respectful in your conversations."

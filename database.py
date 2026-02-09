@@ -153,6 +153,7 @@ def init_database():
                 ("total_chats", "INTEGER DEFAULT 0"),
                 ("reported_count", "INTEGER DEFAULT 0"),
                 ("is_banned", "BOOLEAN DEFAULT FALSE"),
+                ("is_muted", "BOOLEAN DEFAULT FALSE"),
                 ("ban_reason", "TEXT"),
                 ("ban_date", "TIMESTAMP"),
                 ("banned_by", "BIGINT"),

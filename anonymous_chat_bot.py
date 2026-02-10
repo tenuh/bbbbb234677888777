@@ -708,12 +708,30 @@ def contains_inappropriate_content(text: str) -> bool:
         if re.search(pattern, text.lower()):
             return True
     return False
+    
+USERNAME_PATTERN = re.compile(r'@\w+')
+PHONE_PATTERN = re.compile(r'(\+?\d[\d\s\-]{7,}\d)')
+async def block_personal_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
+
+    text = update.message.text
+
+    if USERNAME_PATTERN.search(text) or PHONE_PATTERN.search(text):
+        try:
+            await update.message.delete()
+        except:
+            pass
+        return
+
 
 async def handle_screenshot_attempt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle screenshot attempts (privacy protection)"""
     await update.message.reply_text(Messages.SCREENSHOT_BLOCKED)
 
 # Command Handlers
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command"""
     user_id = update.effective_user.id
@@ -2101,6 +2119,7 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, block_personal_info),group=0)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Set bot commands

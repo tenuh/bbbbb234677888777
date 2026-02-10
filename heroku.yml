@@ -1,9 +1,0 @@
-build:
-  languages:
-    - python
-run:
-  worker: python anonymous_chat_bot.py
-release:
-  image: worker
-  command:
-    - python -c "import database; database.init_database()"

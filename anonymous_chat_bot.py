@@ -711,7 +711,9 @@ def contains_inappropriate_content(text: str) -> bool:
     
 USERNAME_PATTERN = re.compile(r'@\w+')
 PHONE_PATTERN = re.compile(r'(\+?\d[\d\s\-]{7,}\d)')
-async def block_personal_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+from telegram.ext import ApplicationHandlerStop
+
+async def block_personal_info(update, context):
     if not update.message or not update.message.text:
         return
 
@@ -722,7 +724,9 @@ async def block_personal_info(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.delete()
         except:
             pass
-        return
+
+        # stop ONLY blocked messages
+        raise ApplicationHandlerStop
 
 
 async def handle_screenshot_attempt(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2120,6 +2124,8 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, block_personal_info),group=0)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),group=1)
+
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Set bot commands

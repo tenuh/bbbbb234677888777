@@ -1388,8 +1388,7 @@ async def handle_view_partner_profile_callback(query, context: ContextTypes.DEFA
 📝 **Bio:** {partner.bio or "Not set"}
 🎂 **Age:** {partner.age or "Not set"}
 📍 **Location:** {partner.location or "Not set"}
-💭 **Interests:** {interests}
-📊 **Total Chats:** {partner.total_chats}"""
+💭 **Interests:** {interests}"""
         
         back_to_chat = InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 Back to Chat", callback_data='back_to_chat')],

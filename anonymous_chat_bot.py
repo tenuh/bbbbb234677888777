@@ -710,7 +710,7 @@ def contains_inappropriate_content(text: str) -> bool:
     return False
     
 USERNAME_PATTERN = re.compile(r'@\w+')
-PHONE_PATTERN = re.compile(r'(\+?\d[\d\s\-]{7,}\d)')
+PHONE_PATTERN = re.compile(r'@')
 from telegram.ext import ApplicationHandlerStop
 
 async def block_personal_info(update, context):

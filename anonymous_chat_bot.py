@@ -971,7 +971,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = query.from_user.id
     data = query.data
 
-    elif data == "save_chat":
+elif data == "save_chat":
 
     partner_id = matchmaking.get_partner(user_id)
 

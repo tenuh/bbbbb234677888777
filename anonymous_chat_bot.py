@@ -456,10 +456,11 @@ class Keyboards:
             [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
              InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
             [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
-            [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
-             InlineKeyboardButton("🛑 End", callback_data='end_chat')],
-            [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
-        ])
+            [InlineKeyboardButton("💾 Save Chat", callback_data='save_chat')],
+        [InlineKeyboardButton("⏭️ Skip Chat", callback_data='skip_chat')],
+        [InlineKeyboardButton("❌ End Chat", callback_data='end_chat')],
+        [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
+    ])
     
     @staticmethod
     def games_menu():
@@ -938,7 +939,29 @@ async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup=privacy_keyboard,
         parse_mode='Markdown'
     )
+async def saved_chats_command(update, context):
 
+    user_id = update.effective_user.id
+    saved = database.get_saved_chats(user_id)
+
+    if not saved:
+        await update.message.reply_text("📂 No saved chats.")
+        return
+
+    keyboard = []
+
+    for row in saved:
+        sid = row["saved_user_id"]
+
+        keyboard.append([
+            InlineKeyboardButton("🔄 Reconnect", callback_data=f"reconnect_{sid}"),
+            InlineKeyboardButton("❌ Remove", callback_data=f"remove_saved_{sid}")
+        ])
+
+    await update.message.reply_text(
+        "📂 Saved Chats:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+)
 # Callback Query Handlers
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle all button callbacks"""
@@ -947,7 +970,71 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     user_id = query.from_user.id
     data = query.data
-    
+
+    elif data == "save_chat":
+
+    partner_id = matchmaking.get_partner(user_id)
+
+    if not partner_id:
+        await query.answer("❌ Not in chat", show_alert=True)
+        return
+
+    # LIMIT MAX 3
+    if database.count_saved_chats(user_id) >= 3:
+        await query.answer("❌ Max 3 saved chats", show_alert=True)
+        return
+
+    database.add_saved_chat(user_id, partner_id)
+    database.add_saved_chat(partner_id, user_id)
+
+    await query.answer("✅ Chat saved!")
+
+elif data.startswith("reconnect_"):
+
+    target_id = int(data.split("_")[1])
+
+    keyboard = [[
+        InlineKeyboardButton(
+            "Accept",
+            callback_data=f"accept_reconnect_{user_id}"
+        )
+    ]]
+
+    await context.bot.send_message(
+        target_id,
+        "🔔 Someone wants to reconnect with you.",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+    await query.answer("Request sent!")
+
+elif data.startswith("accept_reconnect_"):
+
+    requester = int(data.split("_")[-1])
+# remove old chats safely
+    old = matchmaking.get_partner(user_id)
+    if old:
+        matchmaking.end_session(user_id, old)
+
+    old = matchmaking.get_partner(requester)
+    if old:
+        matchmaking.end_session(requester, old)
+    matchmaking.active_sessions[user_id] = requester
+    matchmaking.active_sessions[requester] = user_id
+
+    await context.bot.send_message(user_id, "💬 Reconnected!")
+    await context.bot.send_message(requester, "💬 Reconneced!")
+
+elif data.startswith("remove_saved_"):
+
+    target = int(data.split("_")[-1])
+
+    database.remove_saved_chat(user_id, target)
+
+    await query.answer("Removed")
+    await query.edit_message_text("❌ Saved chat removed.")
+
+
     # Gender selection
     if data.startswith('gender_'):
         await handle_gender_selection(query, context)
@@ -1302,6 +1389,7 @@ async def show_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
             reply_markup=Keyboards.profile_menu(),
             parse_mode='Markdown'
         )
+
 
 # Profile Management Handlers
 async def handle_edit_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2096,7 +2184,29 @@ async def handle_refresh_search_callback(query, context: ContextTypes.DEFAULT_TY
             reply_markup=Keyboards.main_menu()
         )
         return
-    
+    async def saved_chats_command(update, context):
+
+    user_id = update.effective_user.id
+    saved = database.get_saved_chats(user_id)
+
+    if not saved:
+        await update.message.reply_text("📂 No saved chats.")
+        return
+
+    keyboard = []
+
+    for row in saved:
+        sid = row["saved_user_id"]
+
+        keyboard.append([
+            InlineKeyboardButton("🔄 Reconnect", callback_data=f"reconnect_{sid}"),
+            InlineKeyboardButton("❌ Remove", callback_data=f"remove_saved_{sid}")
+        ])
+
+    await update.message.reply_text(
+        "📂 Saved Chats:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     # Try to find a partner
     partner_id = await matchmaking.find_partner(user_id, context)
     if partner_id:
@@ -2119,6 +2229,7 @@ def main() -> None:
     # Add handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("find", find_partner_command))
+    application.add_handler(CommandHandler("saved", saved_chats_command))
     application.add_handler(CommandHandler("skip", skip_command))
     application.add_handler(CommandHandler("stop", stop_command))
     application.add_handler(CommandHandler("report", report_command))
@@ -2140,6 +2251,7 @@ def main() -> None:
     async def set_commands():
         commands = [
             BotCommand("start", "Start the bot and register"),
+            BotCommand("saved", "View saved chat list"),
             BotCommand("find", "Find a chat partner"),
             BotCommand("skip", "Skip current chat partner"),
             BotCommand("stop", "End current chat"),

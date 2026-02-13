@@ -970,10 +970,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.answer()
     
     user_id = query.from_user.id
-    data = query.data
+        data = query.data
 
-    
-        if data == "save_chat":
+    # =========================
+    # SAVED CHAT FEATURES
+    # =========================
+
+    if data == "save_chat":
 
         partner_id = matchmaking.get_partner(user_id)
 
@@ -990,41 +993,49 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         await query.answer("✅ Chat saved!")
 
-    # Reconnect to saved chat
     elif data.startswith("reconnect_"):
+
         target_id = int(data.split("_")[1])
+
         keyboard = [[
-            InlineKeyboardButton("Accept", callback_data=f"accept_reconnect_{user_id}")
+            InlineKeyboardButton(
+                "Accept",
+                callback_data=f"accept_reconnect_{user_id}"
+            )
         ]]
+
         await context.bot.send_message(
             target_id,
             "🔔 Someone wants to reconnect with you.",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
+
         await query.answer("Request sent!")
 
-    # Accept reconnect request
     elif data.startswith("accept_reconnect_"):
+
         requester = int(data.split("_")[-1])
-        # remove old chats safely
+
         old = matchmaking.get_partner(user_id)
         if old:
             matchmaking.end_session(user_id, old)
-        
+
         old = matchmaking.get_partner(requester)
         if old:
             matchmaking.end_session(requester, old)
-        
+
         matchmaking.active_sessions[user_id] = requester
         matchmaking.active_sessions[requester] = user_id
-        
+
         await context.bot.send_message(user_id, "💬 Reconnected!")
         await context.bot.send_message(requester, "💬 Reconnected!")
 
-    # Remove saved chat
     elif data.startswith("remove_saved_"):
+
         target = int(data.split("_")[-1])
+
         database.remove_saved_chat(user_id, target)
+
         await query.answer("Removed")
         await query.edit_message_text("❌ Saved chat removed.")
 

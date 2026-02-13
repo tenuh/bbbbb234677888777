@@ -962,7 +962,8 @@ async def saved_chats_command(update, context):
         "📂 Saved Chats:",
         reply_markup=InlineKeyboardMarkup(keyboard)
 )
-# Callback Query Handlers
+
+    # Callback Query Handlers
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle all button callbacks"""
     query = update.callback_query
@@ -971,68 +972,61 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = query.from_user.id
     data = query.data
 
-elif data == "save_chat":
+    
+    # Save chat
+    elif data == "save_chat":
+        partner_id = matchmaking.get_partner(user_id)
+        if not partner_id:
+            await query.answer("❌ Not in chat", show_alert=True)
+            return
+        
+        # LIMIT MAX 3
+        if database.count_saved_chats(user_id) >= 3:
+            await query.answer("❌ Max 3 saved chats", show_alert=True)
+            return
+        
+        database.add_saved_chat(user_id, partner_id)
+        database.add_saved_chat(partner_id, user_id)
+        await query.answer("✅ Chat saved!")
 
-    partner_id = matchmaking.get_partner(user_id)
-
-    if not partner_id:
-        await query.answer("❌ Not in chat", show_alert=True)
-        return
-
-    # LIMIT MAX 3
-    if database.count_saved_chats(user_id) >= 3:
-        await query.answer("❌ Max 3 saved chats", show_alert=True)
-        return
-
-    database.add_saved_chat(user_id, partner_id)
-    database.add_saved_chat(partner_id, user_id)
-
-    await query.answer("✅ Chat saved!")
-
-elif data.startswith("reconnect_"):
-
-    target_id = int(data.split("_")[1])
-
-    keyboard = [[
-        InlineKeyboardButton(
-            "Accept",
-            callback_data=f"accept_reconnect_{user_id}"
+    # Reconnect to saved chat
+    elif data.startswith("reconnect_"):
+        target_id = int(data.split("_")[1])
+        keyboard = [[
+            InlineKeyboardButton("Accept", callback_data=f"accept_reconnect_{user_id}")
+        ]]
+        await context.bot.send_message(
+            target_id,
+            "🔔 Someone wants to reconnect with you.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    ]]
+        await query.answer("Request sent!")
 
-    await context.bot.send_message(
-        target_id,
-        "🔔 Someone wants to reconnect with you.",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    # Accept reconnect request
+    elif data.startswith("accept_reconnect_"):
+        requester = int(data.split("_")[-1])
+        # remove old chats safely
+        old = matchmaking.get_partner(user_id)
+        if old:
+            matchmaking.end_session(user_id, old)
+        
+        old = matchmaking.get_partner(requester)
+        if old:
+            matchmaking.end_session(requester, old)
+        
+        matchmaking.active_sessions[user_id] = requester
+        matchmaking.active_sessions[requester] = user_id
+        
+        await context.bot.send_message(user_id, "💬 Reconnected!")
+        await context.bot.send_message(requester, "💬 Reconnected!")
 
-    await query.answer("Request sent!")
+    # Remove saved chat
+    elif data.startswith("remove_saved_"):
+        target = int(data.split("_")[-1])
+        database.remove_saved_chat(user_id, target)
+        await query.answer("Removed")
+        await query.edit_message_text("❌ Saved chat removed.")
 
-elif data.startswith("accept_reconnect_"):
-
-    requester = int(data.split("_")[-1])
-# remove old chats safely
-    old = matchmaking.get_partner(user_id)
-    if old:
-        matchmaking.end_session(user_id, old)
-
-    old = matchmaking.get_partner(requester)
-    if old:
-        matchmaking.end_session(requester, old)
-    matchmaking.active_sessions[user_id] = requester
-    matchmaking.active_sessions[requester] = user_id
-
-    await context.bot.send_message(user_id, "💬 Reconnected!")
-    await context.bot.send_message(requester, "💬 Reconneced!")
-
-elif data.startswith("remove_saved_"):
-
-    target = int(data.split("_")[-1])
-
-    database.remove_saved_chat(user_id, target)
-
-    await query.answer("Removed")
-    await query.edit_message_text("❌ Saved chat removed.")
 
 
     # Gender selection

@@ -1035,63 +1035,145 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         target = int(data.split("_")[-1])
 
         database.remove_saved_chat(user_id, target)
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle all button callbacks"""
+
+    query = update.callback_query
+    await query.answer()
+
+    user_id = query.from_user.id
+    data = query.data
+
+    # ===============================
+    # SAVED CHAT FEATURES
+    # ===============================
+
+    if data == "save_chat":
+
+        partner_id = matchmaking.get_partner(user_id)
+
+        if not partner_id:
+            await query.answer("❌ Not in chat", show_alert=True)
+            return
+
+        if database.count_saved_chats(user_id) >= 3:
+            await query.answer("❌ Max 3 saved chats", show_alert=True)
+            return
+
+        database.add_saved_chat(user_id, partner_id)
+        database.add_saved_chat(partner_id, user_id)
+
+        await query.answer("✅ Chat saved!")
+
+    elif data.startswith("reconnect_"):
+
+        target_id = int(data.split("_")[1])
+
+        keyboard = [[
+            InlineKeyboardButton(
+                "Accept",
+                callback_data=f"accept_reconnect_{user_id}"
+            )
+        ]]
+
+        await context.bot.send_message(
+            target_id,
+            "🔔 Someone wants to reconnect with you.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+        await query.answer("Request sent!")
+
+    elif data.startswith("accept_reconnect_"):
+
+        requester = int(data.split("_")[-1])
+
+        old = matchmaking.get_partner(user_id)
+        if old:
+            matchmaking.end_session(user_id, old)
+
+        old = matchmaking.get_partner(requester)
+        if old:
+            matchmaking.end_session(requester, old)
+
+        matchmaking.active_sessions[user_id] = requester
+        matchmaking.active_sessions[requester] = user_id
+
+        await context.bot.send_message(user_id, "💬 Reconnected!")
+        await context.bot.send_message(requester, "💬 Reconnected!")
+
+    elif data.startswith("remove_saved_"):
+
+        target = int(data.split("_")[-1])
+
+        database.remove_saved_chat(user_id, target)
 
         await query.answer("Removed")
         await query.edit_message_text("❌ Saved chat removed.")
 
+    # ===============================
+    # GENDER SELECTION
+    # ===============================
 
-
-    # Gender selection
-    if data.startswith('gender_'):
+    elif data.startswith('gender_'):
         await handle_gender_selection(query, context)
-    
-    # Main navigation
+
+    # ===============================
+    # MAIN MENU
+    # ===============================
+
     elif data == 'find_partner':
         await handle_find_partner_callback(query, context)
-    
+
     elif data == 'view_profile':
         await show_profile_callback(query, context)
-    
+
     elif data == 'help_menu':
         await query.edit_message_text(
             Messages.HELP_MENU,
             reply_markup=Keyboards.help_navigation(),
             parse_mode='Markdown'
         )
-    
+
     elif data == 'privacy_info':
-        # Create privacy keyboard with back button
         privacy_keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
         ])
-        await query.edit_message_text(Messages.PRIVACY_INFO, reply_markup=privacy_keyboard, parse_mode='Markdown')
-    
+        await query.edit_message_text(
+            Messages.PRIVACY_INFO,
+            reply_markup=privacy_keyboard,
+            parse_mode='Markdown'
+        )
+
     elif data == 'main_menu':
         with database.get_db() as db:
             user = database.get_user(db, user_id)
             if user:
                 await query.edit_message_text(
-                    f"👋 Welcome back, **{user.nickname}**!\n\nWhat would you like to do?",
+                    f"👋 Welcome back, **{user.nickname}**!",
                     reply_markup=Keyboards.main_menu(),
                     parse_mode='Markdown'
                 )
-    
-    # Chat controls
+
+    # ===============================
+    # CHAT CONTROLS
+    # ===============================
+
     elif data == 'skip_chat':
         await handle_skip_chat_callback(query, context)
-    
+
     elif data == 'end_chat':
         await handle_end_chat_callback(query, context)
-    
+
     elif data == 'report_user':
         await handle_report_user_callback(query, context)
-    
+
     elif data == 'back_to_chat':
         await query.edit_message_text(
-            "💬 **Back to Chat**\n\nYou can continue chatting. Use the buttons below:",
-            reply_markup=Keyboards.chat_controls(),
-            parse_mode='Markdown'
+            "💬 Back to Chat",
+            reply_markup=Keyboards.chat_controls()
         )
+
     
     # Profile management
     elif data == 'edit_profile':

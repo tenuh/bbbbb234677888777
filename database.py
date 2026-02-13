@@ -456,6 +456,14 @@ def remove_saved_chat(user_id, saved_user_id):
             (saved_user_id, user_id)
         )
         db.commit()
+        
+def is_chat_already_saved(user_id, saved_user_id):
+    with get_db() as db:
+        r = db.execute(
+            "SELECT 1 FROM saved_chats WHERE user_id=? AND saved_user_id=? AND is_active=1",
+            (user_id, saved_user_id)
+        ).fetchone()
+        return r is not None
 
 
 def count_saved_chats(user_id):

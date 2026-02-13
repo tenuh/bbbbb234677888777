@@ -974,7 +974,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     
     # Save chat
-    elif data == "save_chat":
+       if data == "save_chat":
         partner_id = matchmaking.get_partner(user_id)
         if not partner_id:
             await query.answer("❌ Not in chat", show_alert=True)

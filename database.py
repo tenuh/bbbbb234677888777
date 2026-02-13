@@ -401,6 +401,7 @@ def create_broadcast_message(db, admin_id: int, message: str) -> BroadcastMessag
     
     return broadcast
 
+
 def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count: int):
     """Update broadcast statistics"""
     broadcast = db.query(BroadcastMessage).filter(BroadcastMessage.id == broadcast_id).first()
@@ -409,4 +410,60 @@ def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count:
         broadcast.failed_count = failed_count
         broadcast.completed_at = datetime.utcnow()
         db.flush()
+        
+# ================================
+# SAVED CHATS SYSTEM
+# ================================
+
+def ensure_saved_chats_table():
+    with get_db() as db:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS saved_chats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                saved_user_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active INTEGER DEFAULT 1
+            )
+        """)
+        db.commit()
+
+
+def add_saved_chat(user_id, saved_user_id):
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO saved_chats (user_id, saved_user_id) VALUES (?, ?)",
+            (user_id, saved_user_id)
+        )
+        db.commit()
+
+
+def get_saved_chats(user_id):
+    with get_db() as db:
+        return db.execute(
+            "SELECT saved_user_id FROM saved_chats WHERE user_id=? AND is_active=1",
+            (user_id,)
+        ).fetchall()
+
+def remove_saved_chat(user_id, saved_user_id):
+    with get_db() as db:
+        db.execute(
+            "UPDATE saved_chats SET is_active=0 WHERE user_id=? AND saved_user_id=?",
+            (user_id, saved_user_id)
+        )
+        db.execute(
+            "UPDATE saved_chats SET is_active=0 WHERE user_id=? AND saved_user_id=?",
+            (saved_user_id, user_id)
+        )
+        db.commit()
+
+
+def count_saved_chats(user_id):
+    with get_db() as db:
+        result = db.execute(
+            "SELECT COUNT(*) as total FROM saved_chats WHERE user_id=? AND is_active=1",
+            (user_id,)
+        ).fetchone()
+        return result["total"]
+
 

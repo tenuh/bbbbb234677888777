@@ -973,20 +973,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     data = query.data
 
     
-    # Save chat
-       if data == "save_chat":
+        if data == "save_chat":
+
         partner_id = matchmaking.get_partner(user_id)
+
         if not partner_id:
             await query.answer("❌ Not in chat", show_alert=True)
             return
-        
-        # LIMIT MAX 3
+
         if database.count_saved_chats(user_id) >= 3:
             await query.answer("❌ Max 3 saved chats", show_alert=True)
             return
-        
+
         database.add_saved_chat(user_id, partner_id)
         database.add_saved_chat(partner_id, user_id)
+
         await query.answer("✅ Chat saved!")
 
     # Reconnect to saved chat

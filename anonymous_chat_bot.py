@@ -26,6 +26,14 @@ from telegram.ext import (
 from telegram.error import TelegramError
 
 import database
+from database import (
+    ensure_saved_chats_table,
+    add_saved_chat,
+    get_saved_chats,
+    remove_saved_chat,
+    count_saved_chats,
+    is_chat_already_saved
+)
 
 # Configure logging
 logging.basicConfig(

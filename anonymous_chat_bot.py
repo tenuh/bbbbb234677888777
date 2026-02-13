@@ -966,15 +966,16 @@ async def saved_chats_command(update, context):
     # Callback Query Handlers
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle all button callbacks"""
+
     query = update.callback_query
     await query.answer()
-    
-        user_id = query.from_user.id
-        data = query.data
 
-    # =========================
+    user_id = query.from_user.id
+    data = query.data
+
+    # ===============================
     # SAVED CHAT FEATURES
-    # =========================
+    # ===============================
 
     if data == "save_chat":
 
@@ -1039,8 +1040,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.answer("Removed")
         await query.edit_message_text("❌ Saved chat removed.")
 
-
-
+    # ===============================
+    # GENDER SELECTION
+    # ===============================
     # Gender selection
     if data.startswith('gender_'):
         await handle_gender_selection(query, context)

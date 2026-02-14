@@ -681,6 +681,18 @@ matchmaking = MatchmakingService()
 
 MAX_SAVED_CHATS = 3
 
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+def build_saved_chats_keyboard(saved_partners) -> InlineKeyboardMarkup:
+    """Build inline keyboard for saved chats list"""
+    rows = []
+    for index, saved in enumerate(saved_partners, 1):
+        rows.append([
+            InlineKeyboardButton(f"♻️ Reconnect #{index}", callback_data=f"reconnect_{saved['partner_id']}"),
+            InlineKeyboardButton(f"🗑️ Remove #{index}", callback_data=f"remove_saved_{saved['partner_id']}")
+#=======
+#>>>>>>> master
 def build_saved_chats_keyboard(saved_chats) -> InlineKeyboardMarkup:
     """Build inline keyboard for saved chats list"""
     rows = []
@@ -688,6 +700,10 @@ def build_saved_chats_keyboard(saved_chats) -> InlineKeyboardMarkup:
         rows.append([
             InlineKeyboardButton(f"♻️ Reconnect #{index}", callback_data=f"reconnect_{saved.partner_id}"),
             InlineKeyboardButton(f"🗑️ Remove #{index}", callback_data=f"remove_saved_{saved.partner_id}")
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#>>>>>>> master
+#>>>>>>> master
         ])
     rows.append([InlineKeyboardButton("🏠 Main Menu", callback_data='main_menu')])
     return InlineKeyboardMarkup(rows)
@@ -747,23 +763,70 @@ async def save_current_partner(update: Update, context: ContextTypes.DEFAULT_TYP
 async def show_saved_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Display saved chats list"""
     user_id = update.effective_user.id
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+    saved_partners = []
+
+#=======
+#>>>>>>> master
+#>>>>>>> master
     with database.get_db() as db:
         saved_chats = database.get_saved_chats(db, user_id)
         if not saved_chats:
             await update.message.reply_text(Messages.SAVED_LIST_EMPTY)
             return
 
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+        for saved in saved_chats:
+            partner = database.get_user(db, saved.partner_id)
+            saved_partners.append({
+                'partner_id': saved.partner_id,
+                'name': partner.nickname if partner else 'Unknown partner'
+            })
+
+    lines = [f"📌 Saved Chats ({len(saved_partners)}/{MAX_SAVED_CHATS})", ""]
+    for index, partner_info in enumerate(saved_partners, 1):
+        lines.append(f"{index}. {partner_info['name']}")
+
+    await update.message.reply_text(
+        "\n".join(lines),
+        reply_markup=build_saved_chats_keyboard(saved_partners)
+#=======
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+#>>>>>>> master
         lines = [f"📌 Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})", ""]
         for index, saved in enumerate(saved_chats, 1):
             partner = database.get_user(db, saved.partner_id)
             if partner:
                 lines.append(f"{index}. {partner.nickname}")
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+
+        lines = [f"📌 **Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})**", ""]
+        for index, saved in enumerate(saved_chats, 1):
+            partner = database.get_user(db, saved.partner_id)
+            if partner:
+                lines.append(f"{index}. **{partner.nickname}**")
+
+#>>>>>>> master
             else:
                 lines.append(f"{index}. Unknown partner")
 
     await update.message.reply_text(
         "\n".join(lines),
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
         reply_markup=build_saved_chats_keyboard(saved_chats)
+#=======
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+#=======
+        parse_mode='Markdown',
+#>>>>>>> master
+        reply_markup=build_saved_chats_keyboard(saved_chats)
+#>>>>>>> master
+#>>>>>>> master
     )
 
 # Nicknames for users
@@ -1080,6 +1143,27 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'report_user':
         await handle_report_user_callback(query, context)
 
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+#=======
+    elif data == 'save_partner':
+        await handle_save_partner_callback(query, context)
+
+    elif data.startswith('remove_saved_'):
+        await handle_remove_saved_callback(query, context)
+
+    elif data.startswith('reconnect_'):
+        await handle_reconnect_request_callback(query, context)
+
+    elif data.startswith('accept_reconnect_'):
+        await handle_accept_reconnect_callback(query, context)
+
+    elif data.startswith('decline_reconnect_'):
+        await handle_decline_reconnect_callback(query, context)
+    
+#>>>>>>> master
+#>>>>>>> master
     elif data == 'back_to_chat':
         await query.edit_message_text(
             "💬 **Back to Chat**\n\nYou can continue chatting. Use the buttons below:",
@@ -1616,14 +1700,54 @@ async def handle_save_partner_callback(query, context: ContextTypes.DEFAULT_TYPE
         success, msg = database.save_chat_partner(db, user_id, partner_id, MAX_SAVED_CHATS)
 
     await query.answer(msg, show_alert=not success)
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
     if query.message:
         await query.message.reply_text(("✅ " if success else "❌ ") + msg)
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+    if query.message:
+        await query.message.reply_text(("✅ " if success else "❌ ") + msg)
+#=======
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+    if query.message:
+        await query.message.reply_text(("✅ " if success else "❌ ") + msg) #=======
+#>>>>>>> master
+#>>>>>>> master
+#>>>>>>> master
 
 async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove one saved chat"""
     user_id = query.from_user.id
     partner_id = int(query.data.replace('remove_saved_', ''))
 
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+    saved_partners = []
+    with database.get_db() as db:
+        removed = database.remove_saved_chat(db, user_id, partner_id)
+        saved_chats = database.get_saved_chats(db, user_id)
+        for saved in saved_chats:
+            partner = database.get_user(db, saved.partner_id)
+            saved_partners.append({
+                'partner_id': saved.partner_id,
+                'name': partner.nickname if partner else 'Unknown partner'
+            })
+
+    if not saved_partners:
+        await query.edit_message_text(Messages.SAVED_LIST_EMPTY)
+        await query.answer("Removed." if removed else "Not found.")
+        return
+
+    lines = [f"📌 Saved Chats ({len(saved_partners)}/{MAX_SAVED_CHATS})", ""]
+    for index, partner_info in enumerate(saved_partners, 1):
+        lines.append(f"{index}. {partner_info['name']}")
+
+    await query.edit_message_text(
+        "\n".join(lines),
+        reply_markup=build_saved_chats_keyboard(saved_partners)
+#=======
+#>>>>>>> master
     with database.get_db() as db:
         removed = database.remove_saved_chat(db, user_id, partner_id)
         saved_chats = database.get_saved_chats(db, user_id)
@@ -1631,6 +1755,13 @@ async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE
         for index, saved in enumerate(saved_chats, 1):
             partner = database.get_user(db, saved.partner_id)
             lines.append(f"{index}. {partner.nickname if partner else 'Unknown partner'}")
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+        lines = [f"📌 **Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})**", ""]
+        for index, saved in enumerate(saved_chats, 1):
+            partner = database.get_user(db, saved.partner_id)
+            lines.append(f"{index}. **{partner.nickname if partner else 'Unknown partner'}**")
+#>>>>>>> master
 
     if not saved_chats:
         await query.edit_message_text(Messages.SAVED_LIST_EMPTY)
@@ -1638,7 +1769,16 @@ async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE
 
     await query.edit_message_text(
         "\n".join(lines),
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
         reply_markup=build_saved_chats_keyboard(saved_chats)
+#=======
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+#=======
+        parse_mode='Markdown',
+#>>>>>>> master
+        reply_markup=build_saved_chats_keyboard(saved_chats)
+#>>>>>>> master
+#>>>>>>> master
     )
     await query.answer("Removed." if removed else "Not found.")
 
@@ -1667,7 +1807,20 @@ async def handle_reconnect_request_callback(query, context: ContextTypes.DEFAULT
     try:
         await context.bot.send_message(
             target_id,
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
             f"🔔 Reconnect Request\n\n{requester.nickname if requester else 'Someone'} wants to reconnect with you.",
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+            f"🔔 Reconnect Request\n\n{requester.nickname if requester else 'Someone'} wants to reconnect with you.",
+#=======
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+            f"🔔 Reconnect Request\n\n{requester.nickname if requester else 'Someone'} wants to reconnect with you.",
+#=======
+            f"🔔 **Reconnect Request**\n\n**{requester.nickname if requester else 'Someone'}** wants to reconnect with you.",
+            parse_mode='Markdown',
+#>>>>>>> master
+#>>>>>>> master
+#>>>>>>> master
             reply_markup=actions
         )
     except TelegramError:
@@ -1717,6 +1870,10 @@ async def handle_decline_reconnect_callback(query, context: ContextTypes.DEFAULT
     except TelegramError:
         pass
 
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+#>>>>>>> master
 async def save_partner_callback_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Entry handler for save button callback pattern."""
     if update.callback_query:
@@ -1742,6 +1899,11 @@ async def decline_reconnect_callback_entry(update: Update, context: ContextTypes
     if update.callback_query:
         await handle_decline_reconnect_callback(update.callback_query, context)
 
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#=======
+#>>>>>>> master
+#>>>>>>> master
 # Admin Functions
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /admin command"""
@@ -2341,7 +2503,36 @@ def main() -> None:
     
     # Create application
     application = Application.builder().token(TOKEN).build()
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
     register_handlers(application)
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+    register_handlers(application)
+#=======
+
+    
+    # Add handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("find", find_partner_command))
+    application.add_handler(CommandHandler("skip", skip_command))
+    application.add_handler(CommandHandler("stop", stop_command))
+    application.add_handler(CommandHandler("report", report_command))
+    application.add_handler(CommandHandler("save", save_command))
+    application.add_handler(CommandHandler("saved", saved_command))
+    application.add_handler(CommandHandler("profile", profile_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("privacy", privacy_command))
+    application.add_handler(CommandHandler("viewonce", viewonce_command))
+    application.add_handler(CommandHandler("admin", admin_command))
+    
+    application.add_handler(CallbackQueryHandler(button_callback))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, block_personal_info),group=0)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+#>>>>>>> master
+#>>>>>>> master
     
     # Set bot commands
     async def set_commands():
@@ -2398,11 +2589,20 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("viewonce", viewonce_command))
     application.add_handler(CommandHandler("admin", admin_command))
 
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
+#>>>>>>> master
     application.add_handler(CallbackQueryHandler(save_partner_callback_entry, pattern=r'^save_partner$'))
     application.add_handler(CallbackQueryHandler(remove_saved_callback_entry, pattern=r'^remove_saved_'))
     application.add_handler(CallbackQueryHandler(reconnect_request_callback_entry, pattern=r'^reconnect_'))
     application.add_handler(CallbackQueryHandler(accept_reconnect_callback_entry, pattern=r'^accept_reconnect_'))
     application.add_handler(CallbackQueryHandler(decline_reconnect_callback_entry, pattern=r'^decline_reconnect_'))
+#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
+#=======
+#=======
+#>>>>>>> master
+#>>>>>>> master
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))

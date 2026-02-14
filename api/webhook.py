@@ -33,22 +33,7 @@ from telegram.ext import Application
 
 # Import handlers
 try:
-    from anonymous_chat_bot import (
-        start,
-        find_partner_command,
-        skip_command,
-        stop_command,
-        report_command,
-        profile_command,
-        help_command,
-        privacy_command,
-        save_command,
-        saved_command,
-        button_callback,
-        handle_message,
-        handle_photo,
-        viewonce_command,
-    )
+    from anonymous_chat_bot import register_handlers
 
     HANDLERS_IMPORTED = True
 except Exception as e:
@@ -73,33 +58,7 @@ def get_application():
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
     if HANDLERS_IMPORTED:
-        from telegram.ext import (
-            CommandHandler,
-            CallbackQueryHandler,
-            MessageHandler,
-            filters,
-        )
-
-        # Add all command handlers
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("find", find_partner_command))
-        application.add_handler(CommandHandler("skip", skip_command))
-        application.add_handler(CommandHandler("stop", stop_command))
-        application.add_handler(CommandHandler("report", report_command))
-        application.add_handler(CommandHandler("profile", profile_command))
-        application.add_handler(CommandHandler("save", save_command))
-        application.add_handler(CommandHandler("saved", saved_command))
-        application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(CommandHandler("privacy", privacy_command))
-        application.add_handler(CommandHandler("viewonce", viewonce_command))
-
-        # Add callback and message handlers
-        application.add_handler(CallbackQueryHandler(button_callback))
-        application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-        application.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
-        )
-
+        register_handlers(application)
         logger.info("All handlers registered successfully")
 
     return application

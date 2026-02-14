@@ -42,6 +42,8 @@ try:
         profile_command,
         help_command,
         privacy_command,
+        save_command,
+        saved_command,
         button_callback,
         handle_message,
         handle_photo,
@@ -85,6 +87,8 @@ def get_application():
         application.add_handler(CommandHandler("stop", stop_command))
         application.add_handler(CommandHandler("report", report_command))
         application.add_handler(CommandHandler("profile", profile_command))
+        application.add_handler(CommandHandler("save", save_command))
+        application.add_handler(CommandHandler("saved", saved_command))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("privacy", privacy_command))
         application.add_handler(CommandHandler("viewonce", viewonce_command))

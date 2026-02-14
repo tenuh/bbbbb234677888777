@@ -1823,8 +1823,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle admin broadcast message"""
 
-        message = update.message.text
-        admin_id = update.effective_user.id
+    message = update.message.text
+    admin_id = update.effective_user.id
 
     with database.get_db() as db:
         # Create broadcast record i5

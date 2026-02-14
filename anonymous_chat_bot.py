@@ -1827,7 +1827,7 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
         admin_id = update.effective_user.id
 
     with database.get_db() as db:
-        # Create broadcast record
+        # Create broadcast record i5
         broadcast = database.create_broadcast_message(db, admin_id, message)
         user_ids = database.get_all_user_ids(db)
     

@@ -752,74 +752,8 @@ async def save_current_partner(update: Update, context: ContextTypes.DEFAULT_TYP
     prefix = "✅" if success else "❌"
     await update.message.reply_text(f"{prefix} {msg}")
 
-async def show_saved_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Display saved chats list"""
-    user_id = update.effective_user.id
-#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
-#=======
-#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
-    saved_partners = []
 
-#=======
-#>>>>>>> master
-#>>>>>>> master
-    with database.get_db() as db:
-        saved_chats = database.get_saved_chats(db, user_id)
-        if not saved_chats:
-            await update.message.reply_text(Messages.SAVED_LIST_EMPTY)
-            return
 
-#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
-#=======
-#<<<<<<< codex/add-saved-chat-system-to-bot-r5nl7n
-        for saved in saved_chats:
-            partner = database.get_user(db, saved.partner_id)
-            saved_partners.append({
-                'partner_id': saved.partner_id,
-                'name': partner.nickname if partner else 'Unknown partner'
-            })
-
-    lines = [f"📌 Saved Chats ({len(saved_partners)}/{MAX_SAVED_CHATS})", ""]
-    for index, partner_info in enumerate(saved_partners, 1):
-        lines.append(f"{index}. {partner_info['name']}")
-
-    await update.message.reply_text(
-        "\n".join(lines),
-        reply_markup=build_saved_chats_keyboard(saved_partners)
-#=======
-#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
-#>>>>>>> master
-        lines = [f"📌 Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})", ""]
-        for index, saved in enumerate(saved_chats, 1):
-            partner = database.get_user(db, saved.partner_id)
-            if partner:
-                lines.append(f"{index}. {partner.nickname}")
-#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
-#=======
-
-        lines = [f"📌 **Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})**", ""]
-        for index, saved in enumerate(saved_chats, 1):
-            partner = database.get_user(db, saved.partner_id)
-            if partner:
-                lines.append(f"{index}. **{partner.nickname}**")
-
-#>>>>>>> master
-            else:
-                lines.append(f"{index}. Unknown partner")
-
-    await update.message.reply_text(
-        "\n".join(lines),
-#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
-        reply_markup=build_saved_chats_keyboard(saved_chats)
-#=======
-#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
-#=======
-        parse_mode='Markdown',
-#>>>>>>> master
-        reply_markup=build_saved_chats_keyboard(saved_chats)
-#>>>>>>> master
-#>>>>>>> master
-    )
 
 # Nicknames for users
 NICKNAMES = [

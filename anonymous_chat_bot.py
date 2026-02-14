@@ -1645,7 +1645,7 @@ async def handle_save_partner_callback(query, context: ContextTypes.DEFAULT_TYPE
     await query.answer(msg, show_alert=not success)
 #<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
     if query.message:
-        await query.message.reply_text(("✅ " if success else "❌ ") + msg) =======
+        await query.message.reply_text(("✅ " if success else "❌ ") + msg) #=======
 #>>>>>>> master
 
 async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:

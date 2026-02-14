@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Set
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -120,6 +120,28 @@ class BroadcastMessage(Base):
     failed_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+
+class SavedChat(Base):
+    __tablename__ = 'saved_chats'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    partner_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'partner_id', name='uq_saved_chat_user_partner'),
+    )
+
+class ReconnectRequest(Base):
+    __tablename__ = 'reconnect_requests'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    requester_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    target_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    status = Column(String(20), default='pending')  # pending/accepted/declined
+    created_at = Column(DateTime, default=datetime.utcnow)
+    responded_at = Column(DateTime, nullable=True)
 
 @contextmanager
 def get_db():
@@ -408,3 +430,69 @@ def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count:
         broadcast.failed_count = failed_count
         broadcast.completed_at = datetime.utcnow()
         db.flush()
+
+def get_saved_chats(db, user_id: int) -> List[SavedChat]:
+    """Get saved chat partners for a user"""
+    return db.query(SavedChat).filter(
+        SavedChat.user_id == user_id
+    ).order_by(SavedChat.created_at.desc()).all()
+
+def save_chat_partner(db, user_id: int, partner_id: int, max_saved: int = 3) -> (bool, str):
+    """Save a chat partner for future reconnect"""
+    if user_id == partner_id:
+        return False, "You cannot save yourself."
+
+    existing = db.query(SavedChat).filter(
+        SavedChat.user_id == user_id,
+        SavedChat.partner_id == partner_id
+    ).first()
+    if existing:
+        return False, "This partner is already in your saved list."
+
+    total_saved = db.query(SavedChat).filter(SavedChat.user_id == user_id).count()
+    if total_saved >= max_saved:
+        return False, f"You can save up to {max_saved} chats only."
+
+    db.add(SavedChat(user_id=user_id, partner_id=partner_id))
+    db.flush()
+    return True, "Partner saved successfully."
+
+def remove_saved_chat(db, user_id: int, partner_id: int) -> bool:
+    """Remove a saved chat partner"""
+    deleted = db.query(SavedChat).filter(
+        SavedChat.user_id == user_id,
+        SavedChat.partner_id == partner_id
+    ).delete()
+    db.flush()
+    return bool(deleted)
+
+def create_reconnect_request(db, requester_id: int, target_id: int) -> (Optional[ReconnectRequest], str):
+    """Create a reconnect request if no pending request exists"""
+    existing_pending = db.query(ReconnectRequest).filter(
+        ((ReconnectRequest.requester_id == requester_id) & (ReconnectRequest.target_id == target_id)) |
+        ((ReconnectRequest.requester_id == target_id) & (ReconnectRequest.target_id == requester_id)),
+        ReconnectRequest.status == 'pending'
+    ).first()
+
+    if existing_pending:
+        return None, "There is already a pending reconnect request between you two."
+
+    request = ReconnectRequest(requester_id=requester_id, target_id=target_id, status='pending')
+    db.add(request)
+    db.flush()
+    return request, "Reconnect request sent."
+
+def get_reconnect_request(db, request_id: int) -> Optional[ReconnectRequest]:
+    """Fetch reconnect request by id"""
+    return db.query(ReconnectRequest).filter(ReconnectRequest.id == request_id).first()
+
+def resolve_reconnect_request(db, request_id: int, accepted: bool) -> Optional[ReconnectRequest]:
+    """Mark reconnect request as accepted or declined"""
+    request = get_reconnect_request(db, request_id)
+    if not request or request.status != 'pending':
+        return None
+
+    request.status = 'accepted' if accepted else 'declined'
+    request.responded_at = datetime.utcnow()
+    db.flush()
+    return request

@@ -693,15 +693,7 @@ def build_saved_chats_keyboard(saved_partners) -> InlineKeyboardMarkup:
             InlineKeyboardButton(f"🗑️ Remove #{index}", callback_data=f"remove_saved_{saved['partner_id']}")
 #=======
 #>>>>>>> master
-def build_saved_chats_keyboard(saved_chats) -> InlineKeyboardMarkup:
-    """Build inline keyboard for saved chats list"""
-    rows = []
-    for index, saved in enumerate(saved_chats, 1):
-        rows.append([
-            InlineKeyboardButton(f"♻️ Reconnect #{index}", callback_data=f"reconnect_{saved.partner_id}"),
-            InlineKeyboardButton(f"🗑️ Remove #{index}", callback_data=f"remove_saved_{saved.partner_id}")
-#<<<<<<< codex/add-saved-chat-system-to-bot-fhrjdw
-#=======
+
 #>>>>>>> master
 #>>>>>>> master
         ])

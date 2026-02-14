@@ -753,17 +753,28 @@ async def show_saved_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(Messages.SAVED_LIST_EMPTY)
             return
 
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+        lines = [f"📌 Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})", ""]
+        for index, saved in enumerate(saved_chats, 1):
+            partner = database.get_user(db, saved.partner_id)
+            if partner:
+                lines.append(f"{index}. {partner.nickname}")
+
         lines = [f"📌 **Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})**", ""]
         for index, saved in enumerate(saved_chats, 1):
             partner = database.get_user(db, saved.partner_id)
             if partner:
                 lines.append(f"{index}. **{partner.nickname}**")
+
             else:
                 lines.append(f"{index}. Unknown partner")
 
     await update.message.reply_text(
         "\n".join(lines),
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+#=======
         parse_mode='Markdown',
+#>>>>>>> master
         reply_markup=build_saved_chats_keyboard(saved_chats)
     )
 
@@ -1632,6 +1643,10 @@ async def handle_save_partner_callback(query, context: ContextTypes.DEFAULT_TYPE
         success, msg = database.save_chat_partner(db, user_id, partner_id, MAX_SAVED_CHATS)
 
     await query.answer(msg, show_alert=not success)
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+    if query.message:
+        await query.message.reply_text(("✅ " if success else "❌ ") + msg) =======
+#>>>>>>> master
 
 async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove one saved chat"""
@@ -1641,6 +1656,10 @@ async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE
     with database.get_db() as db:
         removed = database.remove_saved_chat(db, user_id, partner_id)
         saved_chats = database.get_saved_chats(db, user_id)
+        lines = [f"📌 Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})", ""]
+        for index, saved in enumerate(saved_chats, 1):
+            partner = database.get_user(db, saved.partner_id)
+            lines.append(f"{index}. {partner.nickname if partner else 'Unknown partner'}")
         lines = [f"📌 **Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})**", ""]
         for index, saved in enumerate(saved_chats, 1):
             partner = database.get_user(db, saved.partner_id)
@@ -1652,7 +1671,10 @@ async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE
 
     await query.edit_message_text(
         "\n".join(lines),
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+#=======
         parse_mode='Markdown',
+#>>>>>>> master
         reply_markup=build_saved_chats_keyboard(saved_chats)
     )
     await query.answer("Removed." if removed else "Not found.")
@@ -1682,8 +1704,12 @@ async def handle_reconnect_request_callback(query, context: ContextTypes.DEFAULT
     try:
         await context.bot.send_message(
             target_id,
+#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
+            f"🔔 Reconnect Request\n\n{requester.nickname if requester else 'Someone'} wants to reconnect with you.",
+#=======
             f"🔔 **Reconnect Request**\n\n**{requester.nickname if requester else 'Someone'}** wants to reconnect with you.",
             parse_mode='Markdown',
+#>>>>>>> master
             reply_markup=actions
         )
     except TelegramError:
@@ -2332,6 +2358,7 @@ def main() -> None:
     
     # Create application
     application = Application.builder().token(TOKEN).build()
+
     
     # Add handlers
     application.add_handler(CommandHandler("start", start))
@@ -2352,6 +2379,7 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, block_personal_info),group=0)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
     
     # Set bot commands
     async def set_commands():
@@ -2392,6 +2420,27 @@ def main() -> None:
     # Start polling (drop pending updates to avoid conflicts with other instances)
     logger.info("Bot started successfully")
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+
+def register_handlers(application: Application) -> None:
+    """Register all bot handlers (shared by polling and webhook entrypoints)."""
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("find", find_partner_command))
+    application.add_handler(CommandHandler("skip", skip_command))
+    application.add_handler(CommandHandler("stop", stop_command))
+    application.add_handler(CommandHandler("report", report_command))
+    application.add_handler(CommandHandler("save", save_command))
+    application.add_handler(CommandHandler("saved", saved_command))
+    application.add_handler(CommandHandler("profile", profile_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("privacy", privacy_command))
+    application.add_handler(CommandHandler("viewonce", viewonce_command))
+    application.add_handler(CommandHandler("admin", admin_command))
+
+    application.add_handler(CallbackQueryHandler(button_callback))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, block_personal_info), group=0)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 if __name__ == '__main__':
     main()

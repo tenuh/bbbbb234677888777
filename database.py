@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Set
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -120,6 +120,45 @@ class BroadcastMessage(Base):
     failed_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+
+
+class SavedChat(Base):
+    __tablename__ = 'saved_chats'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    partner_user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('owner_user_id', 'partner_user_id', name='uq_saved_chat_owner_partner'),
+    )
+
+
+class SaveChatRequest(Base):
+    __tablename__ = 'save_chat_requests'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    requester_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    target_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('requester_id', 'target_id', name='uq_save_chat_request_pair'),
+    )
+
+
+class ReconnectRequest(Base):
+    __tablename__ = 'reconnect_requests'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    requester_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    target_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('requester_id', 'target_id', name='uq_reconnect_request_pair'),
+    )
 
 @contextmanager
 def get_db():
@@ -408,3 +447,99 @@ def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count:
         broadcast.failed_count = failed_count
         broadcast.completed_at = datetime.utcnow()
         db.flush()
+
+
+def get_saved_chats(db, owner_user_id: int) -> List[SavedChat]:
+    """Get saved chats for a user"""
+    return db.query(SavedChat).filter(
+        SavedChat.owner_user_id == owner_user_id
+    ).order_by(SavedChat.created_at.desc()).all()
+
+
+def get_saved_chat(db, owner_user_id: int, partner_user_id: int) -> Optional[SavedChat]:
+    """Get a specific saved chat relation"""
+    return db.query(SavedChat).filter(
+        SavedChat.owner_user_id == owner_user_id,
+        SavedChat.partner_user_id == partner_user_id
+    ).first()
+
+
+def create_saved_chat(db, owner_user_id: int, partner_user_id: int) -> Optional[SavedChat]:
+    """Create a saved chat relation if not exists"""
+    existing = get_saved_chat(db, owner_user_id, partner_user_id)
+    if existing:
+        return existing
+
+    saved_chat = SavedChat(owner_user_id=owner_user_id, partner_user_id=partner_user_id)
+    db.add(saved_chat)
+    db.flush()
+    return saved_chat
+
+
+def delete_saved_chat(db, owner_user_id: int, partner_user_id: int) -> bool:
+    """Delete one saved chat relation"""
+    relation = get_saved_chat(db, owner_user_id, partner_user_id)
+    if not relation:
+        return False
+
+    db.delete(relation)
+    db.flush()
+    return True
+
+
+def clear_save_chat_requests_between(db, user_a: int, user_b: int):
+    """Delete save chat requests in both directions"""
+    db.query(SaveChatRequest).filter(
+        ((SaveChatRequest.requester_id == user_a) & (SaveChatRequest.target_id == user_b)) |
+        ((SaveChatRequest.requester_id == user_b) & (SaveChatRequest.target_id == user_a))
+    ).delete(synchronize_session=False)
+    db.flush()
+
+
+def get_save_chat_request(db, requester_id: int, target_id: int) -> Optional[SaveChatRequest]:
+    """Get a specific save chat request"""
+    return db.query(SaveChatRequest).filter(
+        SaveChatRequest.requester_id == requester_id,
+        SaveChatRequest.target_id == target_id
+    ).first()
+
+
+def create_save_chat_request(db, requester_id: int, target_id: int) -> Optional[SaveChatRequest]:
+    """Create a save chat request"""
+    existing = get_save_chat_request(db, requester_id, target_id)
+    if existing:
+        return existing
+
+    request = SaveChatRequest(requester_id=requester_id, target_id=target_id)
+    db.add(request)
+    db.flush()
+    return request
+
+
+def clear_reconnect_requests_between(db, user_a: int, user_b: int):
+    """Delete reconnect requests in both directions"""
+    db.query(ReconnectRequest).filter(
+        ((ReconnectRequest.requester_id == user_a) & (ReconnectRequest.target_id == user_b)) |
+        ((ReconnectRequest.requester_id == user_b) & (ReconnectRequest.target_id == user_a))
+    ).delete(synchronize_session=False)
+    db.flush()
+
+
+def get_reconnect_request(db, requester_id: int, target_id: int) -> Optional[ReconnectRequest]:
+    """Get reconnect request for a pair"""
+    return db.query(ReconnectRequest).filter(
+        ReconnectRequest.requester_id == requester_id,
+        ReconnectRequest.target_id == target_id
+    ).first()
+
+
+def create_reconnect_request(db, requester_id: int, target_id: int) -> Optional[ReconnectRequest]:
+    """Create reconnect request"""
+    existing = get_reconnect_request(db, requester_id, target_id)
+    if existing:
+        return existing
+
+    request = ReconnectRequest(requester_id=requester_id, target_id=target_id)
+    db.add(request)
+    db.flush()
+    return request

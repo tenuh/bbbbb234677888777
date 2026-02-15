@@ -180,105 +180,23 @@ def init_database():
             
             logger.info("Database migration completed successfully")
 
-            # Create or migrate saved chats table
+            # Create saved chats table if missing
             try:
                 conn.execute(text(
                     """
                     CREATE TABLE IF NOT EXISTS saved_chats (
                         id SERIAL PRIMARY KEY,
-                        owner_id BIGINT,
-                        partner_id BIGINT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        owner_id BIGINT NOT NULL REFERENCES users(user_id),
+                        partner_id BIGINT NOT NULL REFERENCES users(user_id),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(owner_id, partner_id)
                     )
                     """
                 ))
-                conn.commit()
-
-                saved_chat_columns = {
-                    row[0]
-                    for row in conn.execute(text(
-                        "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'saved_chats'"
-                    ))
-                }
-
-                if 'owner_id' not in saved_chat_columns:
-                    conn.execute(text("ALTER TABLE saved_chats ADD COLUMN owner_id BIGINT"))
-                    conn.commit()
-                    if 'user_id' in saved_chat_columns:
-                        conn.execute(text("UPDATE saved_chats SET owner_id = user_id WHERE owner_id IS NULL"))
-                        conn.commit()
-
-                if 'partner_id' not in saved_chat_columns:
-                    conn.execute(text("ALTER TABLE saved_chats ADD COLUMN partner_id BIGINT"))
-                    conn.commit()
-                    if 'partner_user_id' in saved_chat_columns:
-                        conn.execute(text("UPDATE saved_chats SET partner_id = partner_user_id WHERE partner_id IS NULL"))
-                        conn.commit()
-
-                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
-                conn.execute(text("DELETE FROM saved_chats WHERE owner_id IS NULL OR partner_id IS NULL"))
-                conn.commit()
-
-                try:
-                    conn.execute(text("ALTER TABLE saved_chats ALTER COLUMN owner_id SET NOT NULL"))
-                    conn.execute(text("ALTER TABLE saved_chats ALTER COLUMN partner_id SET NOT NULL"))
-                    conn.commit()
-                except Exception as not_null_error:
-                    logger.warning(f"Saved chats NOT NULL migration warning: {not_null_error}")
-                    conn.rollback()
-
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_chats_owner_id ON saved_chats(owner_id)"))
-                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_saved_chats_owner_partner ON saved_chats(owner_id, partner_id)"))
                 conn.commit()
-
-                try:
-                    conn.execute(text(
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (
-                                SELECT 1
-                                FROM pg_constraint
-                                WHERE conname = 'fk_saved_chats_owner_id'
-                            ) THEN
-                                ALTER TABLE saved_chats
-                                ADD CONSTRAINT fk_saved_chats_owner_id
-                                FOREIGN KEY (owner_id) REFERENCES users(user_id) ON DELETE CASCADE;
-                            END IF;
-                        END
-                        $$;
-                        """
-                    ))
-                    conn.commit()
-                except Exception as owner_fk_error:
-                    logger.warning(f"Saved chats owner FK migration warning: {owner_fk_error}")
-                    conn.rollback()
-
-                try:
-                    conn.execute(text(
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (
-                                SELECT 1
-                                FROM pg_constraint
-                                WHERE conname = 'fk_saved_chats_partner_id'
-                            ) THEN
-                                ALTER TABLE saved_chats
-                                ADD CONSTRAINT fk_saved_chats_partner_id
-                                FOREIGN KEY (partner_id) REFERENCES users(user_id) ON DELETE CASCADE;
-                            END IF;
-                        END
-                        $$;
-                        """
-                    ))
-                    conn.commit()
-                except Exception as partner_fk_error:
-                    logger.warning(f"Saved chats partner FK migration warning: {partner_fk_error}")
-                    conn.rollback()
-            except Exception as migration_error:
-                logger.error(f"Saved chats migration failed: {migration_error}")
-                conn.rollback()
+            except Exception:
+                pass
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
         raise

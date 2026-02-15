@@ -1115,10 +1115,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data.startswith('save_decline_'):
         await handle_save_chat_response_callback(query, context, accepted=False)
-        await handle_save_chat_response_callback(query, accepted=True)
-
-    elif data.startswith('save_decline_'):
-        await handle_save_chat_response_callback(query, accepted=False)
 
     elif data == 'saved_refresh':
         text, keyboard = build_saved_chat_menu(user_id)
@@ -1598,7 +1594,8 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
             return
 
     await query.answer("💾 Save request sent.")
-    pending_save_requests = context.bot_data.setdefault('pending_save_requests', set())
+    bot_data = context.bot_data if context else query.bot_data
+    pending_save_requests = bot_data.setdefault('pending_save_requests', set())
     pending_save_requests.add((partner_id, user_id))
     await context.bot.send_message(user_id, Messages.SAVE_REQUEST_SENT)
     await context.bot.send_message(
@@ -1608,9 +1605,12 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     )
 
 
-async def handle_save_chat_response_callback(query, context: ContextTypes.DEFAULT_TYPE, accepted: bool) -> None:
-async def handle_save_chat_response_callback(query, accepted: bool) -> None:
+async def handle_save_chat_response_callback(query, context: Optional[ContextTypes.DEFAULT_TYPE] = None, accepted: bool = False) -> None:
     """Handle accept/decline for save-chat request"""
+    if isinstance(context, bool):
+        accepted = context
+        context = None
+
     responder_id = query.from_user.id
 
     try:
@@ -1619,7 +1619,8 @@ async def handle_save_chat_response_callback(query, accepted: bool) -> None:
         await query.answer("❌ Invalid save request.", show_alert=True)
         return
 
-    pending_save_requests = context.bot_data.setdefault('pending_save_requests', set())
+    bot_data = context.bot_data if context else query.bot_data
+    pending_save_requests = bot_data.setdefault('pending_save_requests', set())
     request_key = (responder_id, requester_id)
 
     if request_key not in pending_save_requests:
@@ -1628,7 +1629,6 @@ async def handle_save_chat_response_callback(query, accepted: bool) -> None:
 
     if matchmaking.get_partner(responder_id) != requester_id:
         pending_save_requests.discard(request_key)
-    if matchmaking.get_partner(responder_id) != requester_id:
         await query.answer("⚠️ This save request is no longer valid.", show_alert=True)
         return
 
@@ -1754,9 +1754,6 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
         await query.edit_message_text("⚠️ Reconnect failed because one user is busy now.")
         await query.bot.send_message(requester_id, "⚠️ Reconnect failed because one user is busy now.")
         return
-        matchmaking.active_sessions[requester_id] = responder_id
-        matchmaking.active_sessions[responder_id] = requester_id
-        database.create_chat_session(db, requester_id, responder_id)
 
     await query.edit_message_text(Messages.RECONNECT_ACCEPTED)
     await query.bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())

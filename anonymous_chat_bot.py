@@ -1120,6 +1120,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'decline_save':
         await handle_decline_save_callback(query, context)
 
+    elif data == 'cancel_save_request':
+        await handle_cancel_save_request_callback(query, context)
+
     elif data.startswith('reconnect_saved_'):
         await handle_saved_reconnect_request_callback(query, context)
 
@@ -1134,6 +1137,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data == 'decline_reconnect':
         await handle_decline_reconnect_callback(query, context)
+
+    elif data == 'cancel_reconnect_request':
+        await handle_cancel_reconnect_request_callback(query, context)
     
     elif data == 'back_to_chat':
         await query.edit_message_text(
@@ -1706,6 +1712,29 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     request_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
         [InlineKeyboardButton("❌ Delete Request", callback_data='decline_save')]
+    ])
+
+    try:
+        await context.bot.send_message(
+            partner_id,
+            "💾 Your partner wants to save this chat. Accept?",
+            reply_markup=request_buttons
+        )
+    except Exception as e:
+        save_requests.pop(partner_id, None)
+        logger.error(f"Failed to send save request panel from {user_id} to {partner_id}: {e}")
+        await query.answer("❌ Could not send save request to partner.", show_alert=True)
+        return
+
+    await query.answer("💾 Save request sent", show_alert=False)
+    requester_panel = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗑 Delete My Save Request", callback_data='cancel_save_request')]
+    ])
+    await context.bot.send_message(
+        user_id,
+        "⏳ Save request sent. Partner received Accept/Delete panel.",
+        reply_markup=requester_panel
+    )
         [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
     ])
 
@@ -1775,6 +1804,52 @@ async def handle_decline_save_callback(query, context: ContextTypes.DEFAULT_TYPE
         await context.bot.send_message(requester_id, "❌ Your save request was declined.")
 
 
+async def handle_cancel_save_request_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Requester cancels their own pending save request"""
+    user_id = query.from_user.id
+    cancelled_partner = None
+
+    for partner_id, requester_id in list(save_requests.items()):
+        if requester_id == user_id:
+            cancelled_partner = partner_id
+            save_requests.pop(partner_id, None)
+            break
+
+    if not cancelled_partner:
+        await query.answer("❌ No pending save request to delete.", show_alert=True)
+        return
+
+    await query.answer("🗑 Save request deleted.", show_alert=False)
+    await query.edit_message_text("✅ Your save request was deleted.")
+    try:
+        await context.bot.send_message(cancelled_partner, "⚠️ Save request was deleted by requester.")
+    except Exception:
+        pass
+
+
+async def handle_cancel_reconnect_request_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Requester cancels their own pending reconnect request"""
+    user_id = query.from_user.id
+    cancelled_partner = None
+
+    for partner_id, requester_id in list(reconnect_requests.items()):
+        if requester_id == user_id:
+            cancelled_partner = partner_id
+            reconnect_requests.pop(partner_id, None)
+            break
+
+    if not cancelled_partner:
+        await query.answer("❌ No pending reconnect request to delete.", show_alert=True)
+        return
+
+    await query.answer("🗑 Reconnect request deleted.", show_alert=False)
+    await query.edit_message_text("✅ Your reconnect request was deleted.")
+    try:
+        await context.bot.send_message(cancelled_partner, "⚠️ Reconnect request was deleted by requester.")
+    except Exception:
+        pass
+
+
 async def handle_saved_reconnect_request_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle reconnect request from /saved list"""
     user_id = query.from_user.id
@@ -1829,6 +1904,30 @@ async def handle_saved_reconnect_request_callback(query, context: ContextTypes.D
     reconnect_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')],
         [InlineKeyboardButton("❌ Delete Request", callback_data='decline_reconnect')]
+    ])
+
+    try:
+        await context.bot.send_message(
+            partner_id,
+            f"🔄 {requester_name} wants to reconnect from saved chats. Accept?",
+            reply_markup=reconnect_buttons
+        )
+    except Exception as e:
+        reconnect_requests.pop(partner_id, None)
+        logger.error(f"Failed to send reconnect request panel from {user_id} to {partner_id}: {e}")
+        await query.answer("❌ Could not send reconnect request to partner.", show_alert=True)
+        return
+
+    await query.answer("🔄 Reconnect request sent", show_alert=False)
+    requester_panel = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗑 Delete My Reconnect Request", callback_data='cancel_reconnect_request')]
+    ])
+    await context.bot.send_message(
+        user_id,
+        "⏳ Reconnect request sent. Partner received Accept/Delete panel.",
+        reply_markup=requester_panel
+    )
+    await context.bot.send_message(user_id, "⏳ Waiting for partner acceptance...")
         [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
     ])
 

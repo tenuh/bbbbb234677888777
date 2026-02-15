@@ -182,6 +182,37 @@ def init_database():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS saved_chats (
                         id SERIAL PRIMARY KEY,
+                        user_id BIGINT,
+                        partner_id BIGINT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+                # Compatibility migrations for older schemas
+                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS user_id BIGINT"))
+                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS partner_id BIGINT"))
+                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
+
+                # Backfill from legacy column names if present
+                try:
+                    conn.execute(text("UPDATE saved_chats SET user_id = owner_id WHERE user_id IS NULL"))
+                except Exception:
+                    pass
+                try:
+                    conn.execute(text("UPDATE saved_chats SET partner_id = partner_user_id WHERE partner_id IS NULL"))
+                except Exception:
+                    pass
+
+                # Add FK constraints if missing (safe no-op on error)
+                try:
+                    conn.execute(text("ALTER TABLE saved_chats ADD CONSTRAINT fk_saved_chats_user_id FOREIGN KEY (user_id) REFERENCES users(user_id)"))
+                except Exception:
+                    pass
+                try:
+                    conn.execute(text("ALTER TABLE saved_chats ADD CONSTRAINT fk_saved_chats_partner_id FOREIGN KEY (partner_id) REFERENCES users(user_id)"))
+                except Exception:
+                    pass
+
                         user_id BIGINT NOT NULL REFERENCES users(user_id),
                         partner_id BIGINT NOT NULL REFERENCES users(user_id),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

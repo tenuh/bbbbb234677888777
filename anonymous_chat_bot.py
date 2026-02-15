@@ -440,6 +440,7 @@ class Keyboards:
     def main_menu():
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("💬 Find Partner", callback_data='find_partner')],
+            [InlineKeyboardButton("📌 Saved Chats", callback_data='view_saved_chats')],
             [InlineKeyboardButton("👤 My Profile", callback_data='view_profile'), 
              InlineKeyboardButton("❓ Help", callback_data='help_menu')],
             [InlineKeyboardButton("🔒 Privacy", callback_data='privacy_info')]
@@ -681,6 +682,14 @@ matchmaking = MatchmakingService()
 
 MAX_SAVED_CHATS = 3
 
+def build_saved_chats_text(saved_chats) -> str:
+    """Build an anonymous saved chats list text"""
+    lines = [f"📌 **Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})**", ""]
+    for index, saved in enumerate(saved_chats, 1):
+        saved_on = saved.created_at.strftime("%Y-%m-%d") if saved.created_at else "Unknown date"
+        lines.append(f"{index}. **Anonymous Chat {index}** • Saved on {saved_on}")
+    return "\n".join(lines)
+
 def build_saved_chats_keyboard(saved_chats) -> InlineKeyboardMarkup:
     """Build inline keyboard for saved chats list"""
     rows = []
@@ -718,14 +727,12 @@ async def connect_reconnect_pair(context: ContextTypes.DEFAULT_TYPE, user_a_id: 
     if user_a and user_b:
         await context.bot.send_message(
             user_a_id,
-            f"🔗 Reconnected with **{user_b.nickname}**!",
-            parse_mode='Markdown',
+            "🔗 Reconnected with your saved chat partner!",
             reply_markup=Keyboards.chat_controls()
         )
         await context.bot.send_message(
             user_b_id,
-            f"🔗 Reconnected with **{user_a.nickname}**!",
-            parse_mode='Markdown',
+            "🔗 Reconnected with your saved chat partner!",
             reply_markup=Keyboards.chat_controls()
         )
 
@@ -753,28 +760,11 @@ async def show_saved_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(Messages.SAVED_LIST_EMPTY)
             return
 
-#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
-        lines = [f"📌 Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})", ""]
-        for index, saved in enumerate(saved_chats, 1):
-            partner = database.get_user(db, saved.partner_id)
-            if partner:
-                lines.append(f"{index}. {partner.nickname}")
-
-        lines = [f"📌 **Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})**", ""]
-        for index, saved in enumerate(saved_chats, 1):
-            partner = database.get_user(db, saved.partner_id)
-            if partner:
-                lines.append(f"{index}. **{partner.nickname}**")
-
-            else:
-                lines.append(f"{index}. Unknown partner")
+        saved_text = build_saved_chats_text(saved_chats)
 
     await update.message.reply_text(
-        "\n".join(lines),
-#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
-#=======
+        saved_text,
         parse_mode='Markdown',
-#>>>>>>> master
         reply_markup=build_saved_chats_keyboard(saved_chats)
     )
 
@@ -1081,6 +1071,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     reply_markup=Keyboards.main_menu(),
                     parse_mode='Markdown'
                 )
+
+    elif data == 'view_saved_chats':
+        await show_saved_chats_callback(query)
     
     # Chat controls
     elif data == 'skip_chat':
@@ -1643,10 +1636,25 @@ async def handle_save_partner_callback(query, context: ContextTypes.DEFAULT_TYPE
         success, msg = database.save_chat_partner(db, user_id, partner_id, MAX_SAVED_CHATS)
 
     await query.answer(msg, show_alert=not success)
-#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
     if query.message:
-        await query.message.reply_text(("✅ " if success else "❌ ") + msg) #=======
-#>>>>>>> master
+        await query.message.reply_text(("✅ " if success else "❌ ") + msg)
+
+async def show_saved_chats_callback(query) -> None:
+    """Display saved chats list from button callback"""
+    user_id = query.from_user.id
+
+    with database.get_db() as db:
+        saved_chats = database.get_saved_chats(db, user_id)
+
+    if not saved_chats:
+        await query.edit_message_text(Messages.SAVED_LIST_EMPTY)
+        return
+
+    await query.edit_message_text(
+        build_saved_chats_text(saved_chats),
+        parse_mode='Markdown',
+        reply_markup=build_saved_chats_keyboard(saved_chats)
+    )
 
 async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove one saved chat"""
@@ -1656,25 +1664,14 @@ async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE
     with database.get_db() as db:
         removed = database.remove_saved_chat(db, user_id, partner_id)
         saved_chats = database.get_saved_chats(db, user_id)
-        lines = [f"📌 Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})", ""]
-        for index, saved in enumerate(saved_chats, 1):
-            partner = database.get_user(db, saved.partner_id)
-            lines.append(f"{index}. {partner.nickname if partner else 'Unknown partner'}")
-        lines = [f"📌 **Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})**", ""]
-        for index, saved in enumerate(saved_chats, 1):
-            partner = database.get_user(db, saved.partner_id)
-            lines.append(f"{index}. **{partner.nickname if partner else 'Unknown partner'}**")
 
     if not saved_chats:
-        await query.edit_message_text(Messages.SAVED_LIST_EMPTY)
+        await query.edit_message_text(Messages.SAVED_LIST_EMPTY, reply_markup=Keyboards.main_menu())
         return
 
     await query.edit_message_text(
-        "\n".join(lines),
-#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
-#=======
+        build_saved_chats_text(saved_chats),
         parse_mode='Markdown',
-#>>>>>>> master
         reply_markup=build_saved_chats_keyboard(saved_chats)
     )
     await query.answer("Removed." if removed else "Not found.")
@@ -1690,7 +1687,6 @@ async def handle_reconnect_request_callback(query, context: ContextTypes.DEFAULT
 
     with database.get_db() as db:
         request, message = database.create_reconnect_request(db, requester_id, target_id)
-        requester = database.get_user(db, requester_id)
 
     if not request:
         await query.answer(message, show_alert=True)
@@ -1704,12 +1700,8 @@ async def handle_reconnect_request_callback(query, context: ContextTypes.DEFAULT
     try:
         await context.bot.send_message(
             target_id,
-#<<<<<< codex/add-saved-chat-system-to-bot-ff1dk1
-            f"🔔 Reconnect Request\n\n{requester.nickname if requester else 'Someone'} wants to reconnect with you.",
-#=======
-            f"🔔 **Reconnect Request**\n\n**{requester.nickname if requester else 'Someone'}** wants to reconnect with you.",
+            "🔔 **Reconnect Request**\n\nSomeone from your saved chats wants to reconnect with you.",
             parse_mode='Markdown',
-#>>>>>>> master
             reply_markup=actions
         )
     except TelegramError:

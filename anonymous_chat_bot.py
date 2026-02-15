@@ -1734,6 +1734,9 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
         await query.edit_message_text("⚠️ Reconnect failed because one user is busy now.")
         await query.bot.send_message(requester_id, "⚠️ Reconnect failed because one user is busy now.")
         return
+        matchmaking.active_sessions[requester_id] = responder_id
+        matchmaking.active_sessions[responder_id] = requester_id
+        database.create_chat_session(db, requester_id, responder_id)
 
     await query.edit_message_text(Messages.RECONNECT_ACCEPTED)
     await query.bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())

@@ -699,6 +699,8 @@ class MatchmakingService:
                 return candidate_id
 
         return None
+        """Get current chat partner"""
+        return self.active_sessions.get(user_id)
 
     async def connect_saved_partners(self, user_a_id: int, user_b_id: int) -> bool:
         """Create active session for saved partners safely"""
@@ -797,6 +799,7 @@ def build_saved_chat_menu(user_id: int):
                 saved_date = saved_chat.created_at.strftime('%Y-%m-%d %H:%M')
             else:
                 saved_date = "Unknown"
+            saved_date = saved_chat.created_at.strftime('%Y-%m-%d %H:%M')
             lines.append(f"{index}. **{partner_name}**")
             lines.append(f"   🆔 `{saved_chat.partner_id}`")
             lines.append(f"   📅 Saved at: {saved_date}")
@@ -1659,6 +1662,7 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
         bot = get_bot_from_callback(query, context)
         if bot:
             await bot.send_message(requester_id, Messages.SAVE_DECLINED_SENDER)
+        await query.bot.send_message(requester_id, Messages.SAVE_DECLINED_SENDER)
         return
 
     with database.get_db() as db:
@@ -1671,6 +1675,7 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
             bot = get_bot_from_callback(query, context)
             if bot:
                 await bot.send_message(requester_id, Messages.SAVE_LIMIT_REACHED)
+            await query.bot.send_message(requester_id, Messages.SAVE_LIMIT_REACHED)
             return
 
         if responder_count >= 3:
@@ -1679,6 +1684,7 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
             bot = get_bot_from_callback(query, context)
             if bot:
                 await bot.send_message(requester_id, "❌ Partner cannot save now because their list is full.")
+            await query.bot.send_message(requester_id, "❌ Partner cannot save now because their list is full.")
             return
 
         database.create_saved_chat(db, requester_id, responder_id)
@@ -1689,6 +1695,7 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
     bot = get_bot_from_callback(query, context)
     if bot:
         await bot.send_message(requester_id, Messages.SAVE_ACCEPTED_SENDER)
+    await query.bot.send_message(requester_id, Messages.SAVE_ACCEPTED_SENDER)
 
 
 async def handle_saved_delete_callback(query) -> None:
@@ -1761,6 +1768,7 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
         bot = get_bot_from_callback(query, context)
         if bot:
             await bot.send_message(requester_id, Messages.RECONNECT_DECLINED_SENDER)
+        await query.bot.send_message(requester_id, Messages.RECONNECT_DECLINED_SENDER)
         return
 
     if matchmaking.get_partner(responder_id) or responder_id in matchmaking.waiting_users:
@@ -1772,6 +1780,7 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
         bot = get_bot_from_callback(query, context)
         if bot:
             await bot.send_message(requester_id, "⚠️ Reconnect failed because you are busy now.")
+        await query.bot.send_message(requester_id, "⚠️ Reconnect failed because you are busy now.")
         return
 
     with database.get_db() as db:
@@ -1782,6 +1791,7 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
             bot = get_bot_from_callback(query, context)
             if bot:
                 await bot.send_message(requester_id, "⚠️ Reconnect failed because saved chat was removed.")
+            await query.bot.send_message(requester_id, "⚠️ Reconnect failed because saved chat was removed.")
             return
 
     connected = await matchmaking.connect_saved_partners(requester_id, responder_id)
@@ -1797,6 +1807,12 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
     if bot:
         await bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
         await bot.send_message(responder_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
+        await query.bot.send_message(requester_id, "⚠️ Reconnect failed because one user is busy now.")
+        return
+
+    await query.edit_message_text(Messages.RECONNECT_ACCEPTED)
+    await query.bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
+    await query.bot.send_message(responder_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
 
 async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle skip chat button callback"""

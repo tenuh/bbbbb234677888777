@@ -938,6 +938,34 @@ async def build_saved_panel(user_id: int) -> tuple:
         return text, keyboard
 
     lines = ["💾 Saved Chat Panel"]
+async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /saved command"""
+    user_id = update.effective_user.id
+    saved_rows = []
+
+    try:
+        with database.get_db() as db:
+            saved_chats = database.list_saved_chats(db, user_id)
+            for saved_chat in saved_chats:
+                partner = database.get_user(db, saved_chat.partner_id)
+                nickname = partner.nickname if partner else f"User {saved_chat.partner_id}"
+                saved_time = saved_chat.created_at.strftime("%Y-%m-%d %H:%M UTC")
+                saved_rows.append({
+                    'partner_id': saved_chat.partner_id,
+                    'nickname': nickname,
+                    'saved_time': saved_time
+                })
+                saved_rows.append((nickname, saved_time))
+    except Exception as e:
+        logger.error(f"Failed to load saved chats for {user_id}: {e}")
+        await update.message.reply_text("❌ Could not load saved chats right now. Please try again.")
+        return
+
+    if not saved_rows:
+        await update.message.reply_text("💾 You have no saved chats yet.")
+        return
+
+    lines = ["💾 Your Saved Chats"]
     keyboard_rows = []
     for index, row in enumerate(saved_rows, start=1):
         lines.append(f"{index}. {row['nickname']} — {row['saved_time']}")
@@ -948,6 +976,7 @@ async def build_saved_panel(user_id: int) -> tuple:
             ),
             InlineKeyboardButton(
                 f"🗑 Remove #{index}",
+                f"🗑 Delete #{index}",
                 callback_data=f"delete_saved_{row['partner_id']}"
             )
         ])
@@ -968,6 +997,14 @@ async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     await update.message.reply_text(text, reply_markup=keyboard)
+    await update.message.reply_text(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(keyboard_rows)
+    )
+    for index, (nickname, saved_time) in enumerate(saved_rows, start=1):
+        lines.append(f"{index}. {nickname} — {saved_time}")
+
+    await update.message.reply_text("\n".join(lines))
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show user profile"""
@@ -1656,6 +1693,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     if already_saved:
         await query.answer("💾 This chat is already saved.", show_alert=True)
         await context.bot.send_message(user_id, "💾 Already saved. This chat is already in your saved list.")
+        await context.bot.send_message(user_id, "💾 This chat is already saved for both users.")
         return
 
     if requester_count >= 3:
@@ -1674,6 +1712,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     request_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
         [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
+        [InlineKeyboardButton("❌ Delete Request", callback_data='decline_save')]
     ])
 
     try:
@@ -1697,6 +1736,18 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
         "⏳ Save request sent. Partner received Accept/Delete panel.",
         reply_markup=requester_panel
     )
+        [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
+    ])
+
+    await context.bot.send_message(
+        partner_id,
+        "💾 Your partner wants to save this chat. Accept?",
+        reply_markup=request_buttons
+    )
+    await query.answer("💾 Save request sent", show_alert=False)
+    await context.bot.send_message(user_id, "⏳ Save request sent. Partner received Accept/Delete panel.")
+    await query.answer("💾 Save request sent to your partner.")
+    await context.bot.send_message(user_id, "⏳ Save request sent. Waiting for partner acceptance.")
 
 
 async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1737,6 +1788,11 @@ async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE)
     await query.edit_message_text("✅ Save accepted. Chat saved for both users.")
     await context.bot.send_message(user_id, "✅ Save done. Chat saved for both users.")
     await context.bot.send_message(requester_id, "✅ Save done. Partner accepted and chat saved for both users.")
+    await query.edit_message_text("✅ Chat saved for both users!")
+    await context.bot.send_message(user_id, "✅ Chat saved for both users.")
+    await context.bot.send_message(requester_id, "✅ Your save request was accepted. Chat saved for both users.")
+    await query.edit_message_text("✅ Chat saved!")
+    await context.bot.send_message(requester_id, "✅ Your save request was accepted.")
 
 
 async def handle_decline_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1849,6 +1905,7 @@ async def handle_saved_reconnect_request_callback(query, context: ContextTypes.D
     reconnect_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')],
         [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
+        [InlineKeyboardButton("❌ Delete Request", callback_data='decline_reconnect')]
     ])
 
     try:
@@ -1873,6 +1930,16 @@ async def handle_saved_reconnect_request_callback(query, context: ContextTypes.D
         reply_markup=requester_panel
     )
     await context.bot.send_message(user_id, "⏳ Waiting for partner acceptance...")
+        [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
+    ])
+
+    await context.bot.send_message(
+        partner_id,
+        f"🔄 {requester_name} wants to reconnect from saved chats. Accept?",
+        reply_markup=reconnect_buttons
+    )
+    await query.answer("⏳ Reconnect request sent.")
+    await context.bot.send_message(user_id, "⏳ Waiting for your saved partner to accept reconnect...")
 
 
 async def handle_accept_reconnect_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1972,6 +2039,8 @@ async def handle_refresh_saved_list_callback(query, context: ContextTypes.DEFAUL
 
     await query.answer("🔄 Saved list refreshed", show_alert=False)
     await query.edit_message_text(text, reply_markup=keyboard)
+    await query.answer("🗑 Saved chat deleted.")
+    await query.edit_message_text("✅ Saved chat deleted. Use /saved to refresh your list.")
 
 # Admin Functions
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

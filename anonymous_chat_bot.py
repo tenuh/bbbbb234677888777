@@ -453,6 +453,7 @@ class Keyboards:
     def main_menu():
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("💬 Find Partner", callback_data='find_partner')],
+            [InlineKeyboardButton("💾 Saved Chats", callback_data='view_saved_chats')],
             [InlineKeyboardButton("👤 My Profile", callback_data='view_profile'), 
              InlineKeyboardButton("❓ Help", callback_data='help_menu')],
             [InlineKeyboardButton("🔒 Privacy", callback_data='privacy_info')]
@@ -536,6 +537,7 @@ class Keyboards:
             [InlineKeyboardButton("✏️ Edit Profile", callback_data='edit_profile')],
             [InlineKeyboardButton("💭 Set Interests", callback_data='set_interests')],
             [InlineKeyboardButton("😊 Set Mood", callback_data='set_mood')],
+            [InlineKeyboardButton("💾 Saved Chats", callback_data='view_saved_chats')],
             [InlineKeyboardButton("🌐 Language", callback_data='change_language')],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
         ])
@@ -1017,6 +1019,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     elif data == 'view_profile':
         await show_profile_callback(query, context)
+
+    elif data == 'view_saved_chats':
+        text, keyboard = build_saved_chat_menu(user_id)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
     
     elif data == 'help_menu':
         await query.edit_message_text(

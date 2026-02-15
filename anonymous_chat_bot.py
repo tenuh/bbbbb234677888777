@@ -238,6 +238,7 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
 
 👤 **Profile:**
 • `/profile` - View/edit your profile
+• `/saved` - View your mutually saved chats
 • `/interests` - Set your interests
 • 😊 Set Mood - Show your current vibe
 
@@ -448,6 +449,7 @@ class Keyboards:
             [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
              InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
             [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
+            [InlineKeyboardButton("💾 Save Chat", callback_data='save_chat')],
             [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
              InlineKeyboardButton("🛑 End", callback_data='end_chat')],
             [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
@@ -674,6 +676,21 @@ class MatchmakingService:
 
 # Global service instance
 matchmaking = MatchmakingService()
+save_requests: Dict[int, int] = {}
+
+
+def cleanup_save_requests(user_id: int, partner_id: Optional[int] = None) -> None:
+    """Clear pending save requests for ended chats"""
+    save_requests.pop(user_id, None)
+    if partner_id is not None:
+        save_requests.pop(partner_id, None)
+
+    stale_keys = [
+        key for key, requester_id in save_requests.items()
+        if requester_id == user_id or (partner_id is not None and requester_id == partner_id)
+    ]
+    for key in stale_keys:
+        save_requests.pop(key, None)
 
 # Nicknames for users
 NICKNAMES = [
@@ -817,6 +834,7 @@ async def handle_skip_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Handle skipping current chat"""
     user_id = update.effective_user.id
     partner_id = await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
     
     if partner_id:
         await update.message.reply_text(Messages.SKIPPED_CHAT)
@@ -835,6 +853,7 @@ async def handle_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Handle ending chat"""
     user_id = update.effective_user.id
     partner_id = await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
     await matchmaking.remove_from_queue(user_id)
     
     if partner_id:
@@ -866,6 +885,7 @@ async def handle_report_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # End the chat
     await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
     await update.message.reply_text(Messages.REPORT_SENT, reply_markup=Keyboards.main_menu())
     
     if partner_id:
@@ -874,6 +894,33 @@ async def handle_report_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /profile command"""
     await show_profile(update, context)
+
+
+async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /saved command"""
+    user_id = update.effective_user.id
+
+    with database.get_db() as db:
+        saved_chats = database.list_saved_chats(db, user_id)
+        partner_ids = [saved_chat.partner_id for saved_chat in saved_chats]
+        partners = {
+            partner.user_id: partner
+            for partner in [database.get_user(db, partner_id) for partner_id in partner_ids]
+            if partner is not None
+        }
+
+    if not saved_chats:
+        await update.message.reply_text("💾 You have no saved chats yet.")
+        return
+
+    lines = ["💾 **Your Saved Chats**"]
+    for index, saved_chat in enumerate(saved_chats, start=1):
+        partner = partners.get(saved_chat.partner_id)
+        nickname = partner.nickname if partner else f"User {saved_chat.partner_id}"
+        saved_time = saved_chat.created_at.strftime("%Y-%m-%d %H:%M UTC")
+        lines.append(f"{index}. {nickname} — {saved_time}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show user profile"""
@@ -980,6 +1027,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     elif data == 'report_user':
         await handle_report_user_callback(query, context)
+
+    elif data == 'save_chat':
+        await handle_save_chat_callback(query, context)
+
+    elif data == 'accept_save':
+        await handle_accept_save_callback(query, context)
+
+    elif data == 'decline_save':
+        await handle_decline_save_callback(query, context)
     
     elif data == 'back_to_chat':
         await query.edit_message_text(
@@ -1455,6 +1511,7 @@ async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     """Handle skip chat button callback"""
     user_id = query.from_user.id
     partner_id = await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
     
     if partner_id:
         await query.edit_message_text(Messages.SKIPPED_CHAT)
@@ -1472,6 +1529,7 @@ async def handle_end_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) ->
     """Handle end chat button callback"""
     user_id = query.from_user.id
     partner_id = await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
     await matchmaking.remove_from_queue(user_id)
     
     if partner_id:
@@ -1499,10 +1557,94 @@ async def handle_report_user_callback(query, context: ContextTypes.DEFAULT_TYPE)
     
     # End the chat
     await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
     await query.edit_message_text(Messages.REPORT_SENT, reply_markup=Keyboards.main_menu())
     
     if partner_id:
         await context.bot.send_message(partner_id, Messages.CHAT_ENDED_BY_PARTNER, reply_markup=Keyboards.main_menu())
+
+
+async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle save chat request"""
+    user_id = query.from_user.id
+    partner_id = matchmaking.get_partner(user_id)
+
+    if not partner_id:
+        await query.answer("❌ Not in chat", show_alert=True)
+        return
+
+    with database.get_db() as db:
+        requester_count = database.count_saved_chats(db, user_id)
+        partner_count = database.count_saved_chats(db, partner_id)
+        already_saved = database.has_saved_chat(db, user_id, partner_id)
+
+    if already_saved:
+        await query.answer("💾 This chat is already saved.", show_alert=True)
+        return
+
+    if requester_count >= 3:
+        await query.answer("⚠️ You already reached the max limit of 3 saved chats.", show_alert=True)
+        return
+
+    if partner_count >= 3:
+        await query.answer("⚠️ Your partner already reached the max limit of 3 saved chats.", show_alert=True)
+        return
+
+    save_requests[partner_id] = user_id
+    request_buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
+        [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
+    ])
+
+    await context.bot.send_message(
+        partner_id,
+        "💾 Your partner wants to save this chat. Accept?",
+        reply_markup=request_buttons
+    )
+    await query.answer("💾 Save request sent to your partner.")
+
+
+async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle accepting a save chat request"""
+    user_id = query.from_user.id
+    requester_id = save_requests.pop(user_id, None)
+
+    if not requester_id:
+        await query.answer("❌ No pending save request.", show_alert=True)
+        return
+
+    if matchmaking.get_partner(user_id) != requester_id:
+        await query.edit_message_text("❌ Save request expired.")
+        await context.bot.send_message(requester_id, "❌ Your save request expired.")
+        return
+
+    with database.get_db() as db:
+        requester_count = database.count_saved_chats(db, requester_id)
+        accepter_count = database.count_saved_chats(db, user_id)
+        if requester_count >= 3 or accepter_count >= 3:
+            await query.edit_message_text("⚠️ Save failed: one user reached the 3-chat limit.")
+            await context.bot.send_message(requester_id, "⚠️ Save failed because one user reached the 3-chat limit.")
+            return
+
+        saved = database.save_chat_mutual(db, requester_id, user_id)
+
+    if not saved:
+        await query.edit_message_text("💾 This chat was already saved.")
+        await context.bot.send_message(requester_id, "💾 Your chat was already saved earlier.")
+        return
+
+    await query.edit_message_text("✅ Chat saved!")
+    await context.bot.send_message(requester_id, "✅ Your save request was accepted.")
+
+
+async def handle_decline_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle declining a save chat request"""
+    user_id = query.from_user.id
+    requester_id = save_requests.pop(user_id, None)
+
+    await query.edit_message_text("❌ Save request declined.")
+    if requester_id:
+        await context.bot.send_message(requester_id, "❌ Your save request was declined.")
 
 # Admin Functions
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2111,6 +2253,7 @@ def main() -> None:
     application.add_handler(CommandHandler("stop", stop_command))
     application.add_handler(CommandHandler("report", report_command))
     application.add_handler(CommandHandler("profile", profile_command))
+    application.add_handler(CommandHandler("saved", saved_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("privacy", privacy_command))
     application.add_handler(CommandHandler("viewonce", viewonce_command))
@@ -2130,6 +2273,7 @@ def main() -> None:
             BotCommand("skip", "Skip current chat partner"),
             BotCommand("stop", "End current chat"),
             BotCommand("profile", "View/edit your profile"),
+            BotCommand("saved", "View your saved chats"),
             BotCommand("viewonce", "Send a view-once disappearing photo"),
             BotCommand("help", "Show help menu"),
             BotCommand("privacy", "Privacy information"),

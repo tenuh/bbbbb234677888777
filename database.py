@@ -121,6 +121,17 @@ class BroadcastMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
+class SavedChat(Base):
+    __tablename__ = 'saved_chats'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    partner_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+    partner = relationship("User", foreign_keys=[partner_id])
+
 @contextmanager
 def get_db():
     """Database session context manager"""
@@ -408,3 +419,30 @@ def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count:
         broadcast.failed_count = failed_count
         broadcast.completed_at = datetime.utcnow()
         db.flush()
+
+def count_saved_chats(db, user_id: int) -> int:
+    """Get saved chat count for a user"""
+    return db.query(SavedChat).filter(SavedChat.user_id == user_id).count()
+
+def has_saved_chat(db, user_id: int, partner_id: int) -> bool:
+    """Check if a saved chat already exists between users for this direction"""
+    return db.query(SavedChat).filter(
+        SavedChat.user_id == user_id,
+        SavedChat.partner_id == partner_id
+    ).first() is not None
+
+def save_chat_mutual(db, user_a_id: int, user_b_id: int) -> bool:
+    """Save chat for both users if not already saved"""
+    if has_saved_chat(db, user_a_id, user_b_id) or has_saved_chat(db, user_b_id, user_a_id):
+        return False
+
+    db.add(SavedChat(user_id=user_a_id, partner_id=user_b_id))
+    db.add(SavedChat(user_id=user_b_id, partner_id=user_a_id))
+    db.flush()
+    return True
+
+def list_saved_chats(db, user_id: int) -> List[SavedChat]:
+    """Return all saved chats for a user"""
+    return db.query(SavedChat).filter(
+        SavedChat.user_id == user_id
+    ).order_by(SavedChat.created_at.desc()).all()

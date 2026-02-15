@@ -900,27 +900,32 @@ async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Handle /saved command"""
     user_id = update.effective_user.id
 
-    with database.get_db() as db:
-        saved_chats = database.list_saved_chats(db, user_id)
-        partner_ids = [saved_chat.partner_id for saved_chat in saved_chats]
-        partners = {
-            partner.user_id: partner
-            for partner in [database.get_user(db, partner_id) for partner_id in partner_ids]
-            if partner is not None
-        }
+    try:
+        with database.get_db() as db:
+            saved_chats = database.list_saved_chats(db, user_id)
+            partner_ids = [saved_chat.partner_id for saved_chat in saved_chats]
+            partners = {
+                partner.user_id: partner
+                for partner in [database.get_user(db, partner_id) for partner_id in partner_ids]
+                if partner is not None
+            }
+    except Exception as e:
+        logger.error(f"Failed to load saved chats for {user_id}: {e}")
+        await update.message.reply_text("❌ Could not load saved chats right now. Please try again.")
+        return
 
     if not saved_chats:
         await update.message.reply_text("💾 You have no saved chats yet.")
         return
 
-    lines = ["💾 **Your Saved Chats**"]
+    lines = ["💾 Your Saved Chats"]
     for index, saved_chat in enumerate(saved_chats, start=1):
         partner = partners.get(saved_chat.partner_id)
         nickname = partner.nickname if partner else f"User {saved_chat.partner_id}"
         saved_time = saved_chat.created_at.strftime("%Y-%m-%d %H:%M UTC")
         lines.append(f"{index}. {nickname} — {saved_time}")
 
-    await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
+    await update.message.reply_text("\n".join(lines))
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show user profile"""
@@ -1573,10 +1578,15 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
         await query.answer("❌ Not in chat", show_alert=True)
         return
 
-    with database.get_db() as db:
-        requester_count = database.count_saved_chats(db, user_id)
-        partner_count = database.count_saved_chats(db, partner_id)
-        already_saved = database.has_saved_chat(db, user_id, partner_id)
+    try:
+        with database.get_db() as db:
+            requester_count = database.count_saved_chats(db, user_id)
+            partner_count = database.count_saved_chats(db, partner_id)
+            already_saved = database.has_saved_chat(db, user_id, partner_id)
+    except Exception as e:
+        logger.error(f"Save chat precheck failed for {user_id}: {e}")
+        await query.answer("❌ Save system is temporarily unavailable.", show_alert=True)
+        return
 
     if already_saved:
         await query.answer("💾 This chat is already saved.", show_alert=True)
@@ -1618,15 +1628,21 @@ async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE)
         await context.bot.send_message(requester_id, "❌ Your save request expired.")
         return
 
-    with database.get_db() as db:
-        requester_count = database.count_saved_chats(db, requester_id)
-        accepter_count = database.count_saved_chats(db, user_id)
-        if requester_count >= 3 or accepter_count >= 3:
-            await query.edit_message_text("⚠️ Save failed: one user reached the 3-chat limit.")
-            await context.bot.send_message(requester_id, "⚠️ Save failed because one user reached the 3-chat limit.")
-            return
+    try:
+        with database.get_db() as db:
+            requester_count = database.count_saved_chats(db, requester_id)
+            accepter_count = database.count_saved_chats(db, user_id)
+            if requester_count >= 3 or accepter_count >= 3:
+                await query.edit_message_text("⚠️ Save failed: one user reached the 3-chat limit.")
+                await context.bot.send_message(requester_id, "⚠️ Save failed because one user reached the 3-chat limit.")
+                return
 
-        saved = database.save_chat_mutual(db, requester_id, user_id)
+            saved = database.save_chat_mutual(db, requester_id, user_id)
+    except Exception as e:
+        logger.error(f"Save accept failed for requester {requester_id} and accepter {user_id}: {e}")
+        await query.edit_message_text("❌ Failed to save chat. Please try again later.")
+        await context.bot.send_message(requester_id, "❌ Your save request failed due to a temporary issue.")
+        return
 
     if not saved:
         await query.edit_message_text("💾 This chat was already saved.")

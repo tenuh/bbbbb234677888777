@@ -914,6 +914,30 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await show_profile(update, context)
 
 
+async def build_saved_panel(user_id: int) -> tuple:
+    """Build saved list text and keyboard panel"""
+    saved_rows = []
+
+    with database.get_db() as db:
+        saved_chats = database.list_saved_chats(db, user_id)
+        for saved_chat in saved_chats:
+            partner = database.get_user(db, saved_chat.partner_id)
+            nickname = partner.nickname if partner else f"User {saved_chat.partner_id}"
+            saved_time = saved_chat.created_at.strftime("%Y-%m-%d %H:%M UTC")
+            saved_rows.append({
+                'partner_id': saved_chat.partner_id,
+                'nickname': nickname,
+                'saved_time': saved_time
+            })
+
+    if not saved_rows:
+        text = "💾 Your saved chat list is empty."
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Refresh", callback_data='refresh_saved_list')]
+        ])
+        return text, keyboard
+
+    lines = ["💾 Saved Chat Panel"]
 async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /saved command"""
     user_id = update.effective_user.id
@@ -951,11 +975,28 @@ async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 callback_data=f"reconnect_saved_{row['partner_id']}"
             ),
             InlineKeyboardButton(
+                f"🗑 Remove #{index}",
                 f"🗑 Delete #{index}",
                 callback_data=f"delete_saved_{row['partner_id']}"
             )
         ])
 
+    keyboard_rows.append([InlineKeyboardButton("🔄 Refresh", callback_data='refresh_saved_list')])
+    return "\n".join(lines), InlineKeyboardMarkup(keyboard_rows)
+
+
+async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /saved command"""
+    user_id = update.effective_user.id
+
+    try:
+        text, keyboard = await build_saved_panel(user_id)
+    except Exception as e:
+        logger.error(f"Failed to load saved chats for {user_id}: {e}")
+        await update.message.reply_text("❌ Could not load saved chats right now. Please try again.")
+        return
+
+    await update.message.reply_text(text, reply_markup=keyboard)
     await update.message.reply_text(
         "\n".join(lines),
         reply_markup=InlineKeyboardMarkup(keyboard_rows)
@@ -1021,8 +1062,7 @@ async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle all button callbacks"""
     query = update.callback_query
-    await query.answer()
-    
+
     user_id = query.from_user.id
     data = query.data
     
@@ -1085,6 +1125,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data.startswith('delete_saved_'):
         await handle_delete_saved_chat_callback(query, context)
+
+    elif data == 'refresh_saved_list':
+        await handle_refresh_saved_list_callback(query, context)
 
     elif data == 'accept_reconnect':
         await handle_accept_reconnect_callback(query, context)
@@ -1643,6 +1686,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
 
     if already_saved:
         await query.answer("💾 This chat is already saved.", show_alert=True)
+        await context.bot.send_message(user_id, "💾 Already saved. This chat is already in your saved list.")
         await context.bot.send_message(user_id, "💾 This chat is already saved for both users.")
         return
 
@@ -1661,6 +1705,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     save_requests[partner_id] = user_id
     request_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
+        [InlineKeyboardButton("❌ Delete Request", callback_data='decline_save')]
         [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
     ])
 
@@ -1669,6 +1714,8 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
         "💾 Your partner wants to save this chat. Accept?",
         reply_markup=request_buttons
     )
+    await query.answer("💾 Save request sent", show_alert=False)
+    await context.bot.send_message(user_id, "⏳ Save request sent. Partner received Accept/Delete panel.")
     await query.answer("💾 Save request sent to your partner.")
     await context.bot.send_message(user_id, "⏳ Save request sent. Waiting for partner acceptance.")
 
@@ -1708,6 +1755,9 @@ async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE)
         await context.bot.send_message(requester_id, "💾 Your chat was already saved earlier.")
         return
 
+    await query.edit_message_text("✅ Save accepted. Chat saved for both users.")
+    await context.bot.send_message(user_id, "✅ Save done. Chat saved for both users.")
+    await context.bot.send_message(requester_id, "✅ Save done. Partner accepted and chat saved for both users.")
     await query.edit_message_text("✅ Chat saved for both users!")
     await context.bot.send_message(user_id, "✅ Chat saved for both users.")
     await context.bot.send_message(requester_id, "✅ Your save request was accepted. Chat saved for both users.")
@@ -1778,6 +1828,7 @@ async def handle_saved_reconnect_request_callback(query, context: ContextTypes.D
     requester_name = requester.nickname if requester else "Your saved partner"
     reconnect_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')],
+        [InlineKeyboardButton("❌ Delete Request", callback_data='decline_reconnect')]
         [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
     ])
 
@@ -1866,6 +1917,27 @@ async def handle_delete_saved_chat_callback(query, context: ContextTypes.DEFAULT
         await query.answer("⚠️ Saved chat was not found.", show_alert=True)
         return
 
+    await query.answer("🗑 Saved chat removed.", show_alert=False)
+    try:
+        text, keyboard = await build_saved_panel(user_id)
+        await query.edit_message_text(text, reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Failed to refresh saved panel after delete for {user_id}: {e}")
+        await query.edit_message_text("✅ Saved chat removed. Use /saved to open panel again.")
+
+
+async def handle_refresh_saved_list_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Refresh saved list panel"""
+    user_id = query.from_user.id
+    try:
+        text, keyboard = await build_saved_panel(user_id)
+    except Exception as e:
+        logger.error(f"Failed to refresh saved list for {user_id}: {e}")
+        await query.answer("❌ Could not refresh saved list.", show_alert=True)
+        return
+
+    await query.answer("🔄 Saved list refreshed", show_alert=False)
+    await query.edit_message_text(text, reply_markup=keyboard)
     await query.answer("🗑 Saved chat deleted.")
     await query.edit_message_text("✅ Saved chat deleted. Use /saved to refresh your list.")
 

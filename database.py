@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Tuple
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
@@ -132,6 +132,16 @@ class SavedChat(Base):
     __table_args__ = (
         UniqueConstraint('user_id', 'partner_id', name='uq_saved_chat_user_partner'),
     )
+
+class SaveRequest(Base):
+    __tablename__ = 'save_requests'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    requester_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    target_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    status = Column(String(20), default='pending')  # pending/accepted/declined
+    created_at = Column(DateTime, default=datetime.utcnow)
+    responded_at = Column(DateTime, nullable=True)
 
 class ReconnectRequest(Base):
     __tablename__ = 'reconnect_requests'
@@ -437,7 +447,7 @@ def get_saved_chats(db, user_id: int) -> List[SavedChat]:
         SavedChat.user_id == user_id
     ).order_by(SavedChat.created_at.desc()).all()
 
-def save_chat_partner(db, user_id: int, partner_id: int, max_saved: int = 3) -> (bool, str):
+def save_chat_partner(db, user_id: int, partner_id: int, max_saved: int = 3) -> Tuple[bool, str]:
     """Save a chat partner for future reconnect"""
     if user_id == partner_id:
         return False, "You cannot save yourself."
@@ -466,7 +476,41 @@ def remove_saved_chat(db, user_id: int, partner_id: int) -> bool:
     db.flush()
     return bool(deleted)
 
-def create_reconnect_request(db, requester_id: int, target_id: int) -> (Optional[ReconnectRequest], str):
+def create_save_request(db, requester_id: int, target_id: int) -> Tuple[Optional[SaveRequest], str]:
+    """Create a save request if no pending request exists"""
+    existing_pending = db.query(SaveRequest).filter(
+        ((SaveRequest.requester_id == requester_id) & (SaveRequest.target_id == target_id)) |
+        ((SaveRequest.requester_id == target_id) & (SaveRequest.target_id == requester_id)),
+        SaveRequest.status == 'pending'
+    ).first()
+
+    if existing_pending:
+        return None, "There is already a pending save request between you two."
+
+    request = SaveRequest(requester_id=requester_id, target_id=target_id, status='pending')
+    db.add(request)
+    db.flush()
+    return request, "Save request sent."
+
+
+def get_save_request(db, request_id: int) -> Optional[SaveRequest]:
+    """Fetch save request by id"""
+    return db.query(SaveRequest).filter(SaveRequest.id == request_id).first()
+
+
+def resolve_save_request(db, request_id: int, accepted: bool) -> Optional[SaveRequest]:
+    """Mark save request as accepted or declined"""
+    request = get_save_request(db, request_id)
+    if not request or request.status != 'pending':
+        return None
+
+    request.status = 'accepted' if accepted else 'declined'
+    request.responded_at = datetime.utcnow()
+    db.flush()
+    return request
+
+
+def create_reconnect_request(db, requester_id: int, target_id: int) -> Tuple[Optional[ReconnectRequest], str]:
     """Create a reconnect request if no pending request exists"""
     existing_pending = db.query(ReconnectRequest).filter(
         ((ReconnectRequest.requester_id == requester_id) & (ReconnectRequest.target_id == target_id)) |

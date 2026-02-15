@@ -1762,27 +1762,29 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     await query.answer("💾 Save request sent", show_alert=False)
-    requester_panel = build_requester_cancel_save_markup()
-    requester_panel = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🗑 Delete My Save Request", callback_data='cancel_save_request')]
-    ])
-    await context.bot.send_message(
-        user_id,
-        "⏳ Save request sent. Partner received Accept/Delete panel.",
-        reply_markup=requester_panel
-    )
-        [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
-    ])
 
-    await context.bot.send_message(
-        partner_id,
-        "💾 Your partner wants to save this chat. Accept?",
-        reply_markup=request_buttons
-    )
-    await query.answer("💾 Save request sent", show_alert=False)
-    await context.bot.send_message(user_id, "⏳ Save request sent. Partner received Accept/Delete panel.")
-    await query.answer("💾 Save request sent to your partner.")
-    await context.bot.send_message(user_id, "⏳ Save request sent. Waiting for partner acceptance.")
+# Button for requester (cancel request)
+requester_panel = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🗑 Delete My Save Request", callback_data='cancel_save_request')]
+])
+
+await context.bot.send_message(
+    user_id,
+    "⏳ Save request sent. Partner received Accept/Delete panel.",
+    reply_markup=requester_panel
+)
+
+# Buttons shown to partner
+request_buttons = InlineKeyboardMarkup([
+    [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
+    [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
+])
+
+await context.bot.send_message(
+    partner_id,
+    "💾 Your partner wants to save this chat. Accept?",
+    reply_markup=request_buttons
+)
 
 
 async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -709,6 +709,7 @@ def cleanup_reconnect_requests(user_id: int, partner_id: Optional[int] = None) -
 
 def build_save_request_markup() -> InlineKeyboardMarkup:
     """Build partner-facing save request action panel"""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("✅ Accept", callback_data='accept_save')], [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]])
     buttons = [
         [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
         [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
@@ -718,6 +719,7 @@ def build_save_request_markup() -> InlineKeyboardMarkup:
 
 def build_reconnect_request_markup() -> InlineKeyboardMarkup:
     """Build partner-facing reconnect request action panel"""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')], [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]])
     buttons = [
         [InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')],
         [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]

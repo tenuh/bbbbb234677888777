@@ -688,6 +688,17 @@ class MatchmakingService:
                 del self.retry_tasks[user_id]
     
     def get_partner(self, user_id: int) -> Optional[int]:
+        """Get current chat partner and repair one-sided mappings if needed"""
+        partner_id = self.active_sessions.get(user_id)
+        if partner_id:
+            return partner_id
+
+        for candidate_id, candidate_partner in list(self.active_sessions.items()):
+            if candidate_partner == user_id:
+                self.active_sessions[user_id] = candidate_id
+                return candidate_id
+
+        return None
         """Get current chat partner"""
         return self.active_sessions.get(user_id)
 
@@ -784,6 +795,10 @@ def build_saved_chat_menu(user_id: int):
         for index, saved_chat in enumerate(saved_chats, start=1):
             partner = database.get_user(db, saved_chat.partner_id)
             partner_name = partner.nickname if partner else f"User {saved_chat.partner_id}"
+            if saved_chat.created_at:
+                saved_date = saved_chat.created_at.strftime('%Y-%m-%d %H:%M')
+            else:
+                saved_date = "Unknown"
             saved_date = saved_chat.created_at.strftime('%Y-%m-%d %H:%M')
             lines.append(f"{index}. **{partner_name}**")
             lines.append(f"   🆔 `{saved_chat.partner_id}`")
@@ -794,6 +809,15 @@ def build_saved_chat_menu(user_id: int):
         buttons.append([InlineKeyboardButton("🔄 Refresh", callback_data='saved_refresh')])
         buttons.append([InlineKeyboardButton("🏠 Main Menu", callback_data='main_menu')])
         return "\n".join(lines).strip(), InlineKeyboardMarkup(buttons)
+
+
+def get_bot_from_callback(query, context: Optional[ContextTypes.DEFAULT_TYPE] = None):
+    """Safely resolve bot instance in callback handlers"""
+    if context and getattr(context, 'bot', None):
+        return context.bot
+    if query and getattr(query, 'message', None):
+        return query.message.get_bot()
+    return None
     
 USERNAME_PATTERN = re.compile(r'@\w+')
 PHONE_PATTERN = re.compile(r'(\+?\d[\d\s\-]{7,}\d)')
@@ -1635,6 +1659,9 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
     if not accepted:
         pending_save_requests.discard(request_key)
         await query.edit_message_text(Messages.SAVE_DECLINED_PARTNER)
+        bot = get_bot_from_callback(query, context)
+        if bot:
+            await bot.send_message(requester_id, Messages.SAVE_DECLINED_SENDER)
         await query.bot.send_message(requester_id, Messages.SAVE_DECLINED_SENDER)
         return
 
@@ -1645,12 +1672,18 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
         if requester_count >= 3:
             pending_save_requests.discard(request_key)
             await query.edit_message_text("⚠️ Requester reached the saved chat limit (3).")
+            bot = get_bot_from_callback(query, context)
+            if bot:
+                await bot.send_message(requester_id, Messages.SAVE_LIMIT_REACHED)
             await query.bot.send_message(requester_id, Messages.SAVE_LIMIT_REACHED)
             return
 
         if responder_count >= 3:
             pending_save_requests.discard(request_key)
             await query.edit_message_text("⚠️ You already have 3 saved chats. Delete one first.")
+            bot = get_bot_from_callback(query, context)
+            if bot:
+                await bot.send_message(requester_id, "❌ Partner cannot save now because their list is full.")
             await query.bot.send_message(requester_id, "❌ Partner cannot save now because their list is full.")
             return
 
@@ -1659,6 +1692,9 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
 
     pending_save_requests.discard(request_key)
     await query.edit_message_text(Messages.SAVE_ACCEPTED_PARTNER)
+    bot = get_bot_from_callback(query, context)
+    if bot:
+        await bot.send_message(requester_id, Messages.SAVE_ACCEPTED_SENDER)
     await query.bot.send_message(requester_id, Messages.SAVE_ACCEPTED_SENDER)
 
 
@@ -1729,6 +1765,9 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
 
     if not accepted:
         await query.edit_message_text(Messages.RECONNECT_DECLINED_PARTNER)
+        bot = get_bot_from_callback(query, context)
+        if bot:
+            await bot.send_message(requester_id, Messages.RECONNECT_DECLINED_SENDER)
         await query.bot.send_message(requester_id, Messages.RECONNECT_DECLINED_SENDER)
         return
 
@@ -1738,6 +1777,9 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
 
     if matchmaking.get_partner(requester_id) or requester_id in matchmaking.waiting_users:
         await query.edit_message_text("⚠️ Requester is no longer available.")
+        bot = get_bot_from_callback(query, context)
+        if bot:
+            await bot.send_message(requester_id, "⚠️ Reconnect failed because you are busy now.")
         await query.bot.send_message(requester_id, "⚠️ Reconnect failed because you are busy now.")
         return
 
@@ -1746,12 +1788,25 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
         responder_saved = database.get_saved_chat(db, responder_id, requester_id)
         if not requester_saved or not responder_saved:
             await query.edit_message_text("⚠️ Saved chat link no longer exists.")
+            bot = get_bot_from_callback(query, context)
+            if bot:
+                await bot.send_message(requester_id, "⚠️ Reconnect failed because saved chat was removed.")
             await query.bot.send_message(requester_id, "⚠️ Reconnect failed because saved chat was removed.")
             return
 
     connected = await matchmaking.connect_saved_partners(requester_id, responder_id)
     if not connected:
         await query.edit_message_text("⚠️ Reconnect failed because one user is busy now.")
+        bot = get_bot_from_callback(query, context)
+        if bot:
+            await bot.send_message(requester_id, "⚠️ Reconnect failed because one user is busy now.")
+        return
+
+    await query.edit_message_text(Messages.RECONNECT_ACCEPTED)
+    bot = get_bot_from_callback(query, context)
+    if bot:
+        await bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
+        await bot.send_message(responder_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
         await query.bot.send_message(requester_id, "⚠️ Reconnect failed because one user is busy now.")
         return
 

@@ -1111,6 +1111,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await handle_save_chat_callback(query, context)
 
     elif data.startswith('save_accept_'):
+        await handle_save_chat_response_callback(query, context, accepted=True)
+
+    elif data.startswith('save_decline_'):
+        await handle_save_chat_response_callback(query, context, accepted=False)
         await handle_save_chat_response_callback(query, accepted=True)
 
     elif data.startswith('save_decline_'):
@@ -1594,6 +1598,8 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
             return
 
     await query.answer("💾 Save request sent.")
+    pending_save_requests = context.bot_data.setdefault('pending_save_requests', set())
+    pending_save_requests.add((partner_id, user_id))
     await context.bot.send_message(user_id, Messages.SAVE_REQUEST_SENT)
     await context.bot.send_message(
         partner_id,
@@ -1602,6 +1608,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     )
 
 
+async def handle_save_chat_response_callback(query, context: ContextTypes.DEFAULT_TYPE, accepted: bool) -> None:
 async def handle_save_chat_response_callback(query, accepted: bool) -> None:
     """Handle accept/decline for save-chat request"""
     responder_id = query.from_user.id
@@ -1612,11 +1619,21 @@ async def handle_save_chat_response_callback(query, accepted: bool) -> None:
         await query.answer("❌ Invalid save request.", show_alert=True)
         return
 
+    pending_save_requests = context.bot_data.setdefault('pending_save_requests', set())
+    request_key = (responder_id, requester_id)
+
+    if request_key not in pending_save_requests:
+        await query.answer("⚠️ This save request has expired.", show_alert=True)
+        return
+
+    if matchmaking.get_partner(responder_id) != requester_id:
+        pending_save_requests.discard(request_key)
     if matchmaking.get_partner(responder_id) != requester_id:
         await query.answer("⚠️ This save request is no longer valid.", show_alert=True)
         return
 
     if not accepted:
+        pending_save_requests.discard(request_key)
         await query.edit_message_text(Messages.SAVE_DECLINED_PARTNER)
         await query.bot.send_message(requester_id, Messages.SAVE_DECLINED_SENDER)
         return
@@ -1626,11 +1643,13 @@ async def handle_save_chat_response_callback(query, accepted: bool) -> None:
         responder_count = database.count_saved_chats_for_owner(db, responder_id)
 
         if requester_count >= 3:
+            pending_save_requests.discard(request_key)
             await query.edit_message_text("⚠️ Requester reached the saved chat limit (3).")
             await query.bot.send_message(requester_id, Messages.SAVE_LIMIT_REACHED)
             return
 
         if responder_count >= 3:
+            pending_save_requests.discard(request_key)
             await query.edit_message_text("⚠️ You already have 3 saved chats. Delete one first.")
             await query.bot.send_message(requester_id, "❌ Partner cannot save now because their list is full.")
             return
@@ -1638,6 +1657,7 @@ async def handle_save_chat_response_callback(query, accepted: bool) -> None:
         database.create_saved_chat(db, requester_id, responder_id)
         database.create_saved_chat(db, responder_id, requester_id)
 
+    pending_save_requests.discard(request_key)
     await query.edit_message_text(Messages.SAVE_ACCEPTED_PARTNER)
     await query.bot.send_message(requester_id, Messages.SAVE_ACCEPTED_SENDER)
 
@@ -1962,17 +1982,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await handle_profile_editing(update, context, editing_state)
         return
     
-    # Check if user is searching - block commands during search
-    if user_id in matchmaking.waiting_users:
-        await update.message.reply_text(
-            "🔍 You're currently searching for a partner. Please use the search control buttons or stop your search to use commands."
-        )
-        return
-    
     # Check if user is in chat
     partner_id = matchmaking.get_partner(user_id)
-    
+
     if partner_id:
+        if user_id in matchmaking.waiting_users:
+            matchmaking.waiting_users.discard(user_id)
         # Forward message to partner with content warning if needed
         if contains_inappropriate_content(message_text):
             await update.message.reply_text(Messages.WARNING_MESSAGE, parse_mode='Markdown')
@@ -1992,6 +2007,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.error(f"Failed to forward message: {e}")
             await update.message.reply_text("❌ Failed to send message. Your partner may have left.")
     else:
+        if user_id in matchmaking.waiting_users:
+            await update.message.reply_text(
+                "🔍 You're currently searching for a partner. Please use the search control buttons or stop your search to use commands."
+            )
+            return
+
         # User not in chat - show main menu
         with database.get_db() as db:
             user = database.get_user(db, user_id)
@@ -2287,6 +2308,37 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
 
+async def handle_video_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle MP4 files sent as documents"""
+    if not update.message or not update.message.document:
+        return
+
+    mime_type = (update.message.document.mime_type or '').lower()
+    file_name = (update.message.document.file_name or '').lower()
+    if mime_type != 'video/mp4' and not file_name.endswith('.mp4'):
+        return
+
+    user_id = update.effective_user.id
+    partner_id = matchmaking.get_partner(user_id)
+
+    if partner_id:
+        try:
+            await context.bot.send_document(
+                partner_id,
+                update.message.document.file_id,
+                caption="🎬 Your chat partner sent you an MP4 video file!",
+                protect_content=True
+            )
+        except TelegramError as e:
+            logger.error(f"Failed to forward MP4 document: {e}")
+            await update.message.reply_text("❌ Failed to send MP4. Your partner may have left.")
+    else:
+        await update.message.reply_text(
+            "🎬 To send MP4 files, you need to be in an active chat.",
+            reply_markup=Keyboards.main_menu()
+        )
+
+
 async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle sticker messages"""
     if not update.message or not update.message.sticker:
@@ -2437,6 +2489,7 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.VIDEO, handle_video))
+    application.add_handler(MessageHandler(filters.Document.MimeType("video/mp4"), handle_video_document))
     application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, block_personal_info),group=0)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

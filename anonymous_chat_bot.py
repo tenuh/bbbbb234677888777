@@ -690,6 +690,26 @@ class MatchmakingService:
     def get_partner(self, user_id: int) -> Optional[int]:
         """Get current chat partner"""
         return self.active_sessions.get(user_id)
+
+    async def connect_saved_partners(self, user_a_id: int, user_b_id: int) -> bool:
+        """Create active session for saved partners safely"""
+        async with self.lock:
+            if user_a_id in self.active_sessions or user_b_id in self.active_sessions:
+                return False
+            if user_a_id in self.waiting_users or user_b_id in self.waiting_users:
+                return False
+
+            for uid in [user_a_id, user_b_id]:
+                if uid in self.retry_tasks:
+                    self.retry_tasks[uid].cancel()
+                    del self.retry_tasks[uid]
+
+            self.active_sessions[user_a_id] = user_b_id
+            self.active_sessions[user_b_id] = user_a_id
+
+            with database.get_db() as db:
+                database.create_chat_session(db, user_a_id, user_b_id)
+            return True
     
     async def start_matching_with_retry(self, user_id: int, context: ContextTypes.DEFAULT_TYPE):
         """Start matching process with retry logic"""
@@ -1709,6 +1729,11 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
             await query.bot.send_message(requester_id, "⚠️ Reconnect failed because saved chat was removed.")
             return
 
+    connected = await matchmaking.connect_saved_partners(requester_id, responder_id)
+    if not connected:
+        await query.edit_message_text("⚠️ Reconnect failed because one user is busy now.")
+        await query.bot.send_message(requester_id, "⚠️ Reconnect failed because one user is busy now.")
+        return
         matchmaking.active_sessions[requester_id] = responder_id
         matchmaking.active_sessions[responder_id] = requester_id
         database.create_chat_session(db, requester_id, responder_id)
@@ -2236,6 +2261,32 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 reply_markup=Keyboards.main_menu()
             )
 
+async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle video messages"""
+    if not update.message or not update.message.video:
+        return
+
+    user_id = update.effective_user.id
+    partner_id = matchmaking.get_partner(user_id)
+
+    if partner_id:
+        try:
+            await context.bot.send_video(
+                partner_id,
+                update.message.video.file_id,
+                caption="🎬 Your chat partner sent you a video!",
+                protect_content=True
+            )
+        except TelegramError as e:
+            logger.error(f"Failed to forward video: {e}")
+            await update.message.reply_text("❌ Failed to send video. Your partner may have left.")
+    else:
+        await update.message.reply_text(
+            "🎬 To send videos, you need to be in an active chat.",
+            reply_markup=Keyboards.main_menu()
+        )
+
+
 async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle sticker messages"""
     if not update.message or not update.message.sticker:
@@ -2385,6 +2436,7 @@ def main() -> None:
     
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.VIDEO, handle_video))
     application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, block_personal_info),group=0)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

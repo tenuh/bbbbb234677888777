@@ -215,6 +215,14 @@ def init_database():
                         conn.execute(text("UPDATE saved_chats SET partner_id = partner_user_id WHERE partner_id IS NULL"))
                         conn.commit()
 
+                if 'user_id' in saved_chat_columns and 'owner_id' in saved_chat_columns:
+                    conn.execute(text("UPDATE saved_chats SET user_id = owner_id WHERE user_id IS NULL AND owner_id IS NOT NULL"))
+                    conn.commit()
+
+                if 'partner_user_id' in saved_chat_columns and 'partner_id' in saved_chat_columns:
+                    conn.execute(text("UPDATE saved_chats SET partner_user_id = partner_id WHERE partner_user_id IS NULL AND partner_id IS NOT NULL"))
+                    conn.commit()
+
                 conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
                 conn.execute(text("DELETE FROM saved_chats WHERE owner_id IS NULL OR partner_id IS NULL"))
                 conn.commit()
@@ -534,6 +542,14 @@ def _get_saved_chat_columns(db):
     return owner_col, partner_col
 
 
+def _get_saved_chat_column_set(db) -> Set[str]:
+    """Get all columns currently present in saved_chats table"""
+    rows = db.execute(text(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'saved_chats'"
+    )).fetchall()
+    return {row[0] for row in rows}
+
+
 def get_saved_chat(db, owner_id: int, partner_id: int) -> Optional[SavedChat]:
     """Get one saved chat for owner and partner"""
     owner_col, partner_col = _get_saved_chat_columns(db)
@@ -599,10 +615,34 @@ def create_saved_chat(db, owner_id: int, partner_id: int) -> Optional[SavedChat]
     if not owner_col or not partner_col:
         return None
 
+    columns = _get_saved_chat_column_set(db)
+    insert_fields = [owner_col, partner_col]
+    params = {
+        'owner_id': owner_id,
+        'partner_id': partner_id,
+    }
+
+    if 'user_id' in columns and 'user_id' not in insert_fields:
+        insert_fields.append('user_id')
+        params['user_id'] = owner_id
+
+    if 'partner_user_id' in columns and 'partner_user_id' not in insert_fields:
+        insert_fields.append('partner_user_id')
+        params['partner_user_id'] = partner_id
+
+    values_clause = []
+    for field in insert_fields:
+        if field == owner_col:
+            values_clause.append(':owner_id')
+        elif field == partner_col:
+            values_clause.append(':partner_id')
+        else:
+            values_clause.append(f':{field}')
+
     insert_query = text(
-        f"INSERT INTO saved_chats ({owner_col}, {partner_col}) VALUES (:owner_id, :partner_id) RETURNING id, created_at"
+        f"INSERT INTO saved_chats ({', '.join(insert_fields)}) VALUES ({', '.join(values_clause)}) RETURNING id, created_at"
     )
-    row = db.execute(insert_query, {'owner_id': owner_id, 'partner_id': partner_id}).fetchone()
+    row = db.execute(insert_query, params).fetchone()
     if not row:
         return None
 

@@ -899,38 +899,27 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /saved command"""
     user_id = update.effective_user.id
+    saved_rows = []
 
     try:
         with database.get_db() as db:
             saved_chats = database.list_saved_chats(db, user_id)
-            saved_rows = []
             for saved_chat in saved_chats:
                 partner = database.get_user(db, saved_chat.partner_id)
                 nickname = partner.nickname if partner else f"User {saved_chat.partner_id}"
                 saved_time = saved_chat.created_at.strftime("%Y-%m-%d %H:%M UTC")
                 saved_rows.append((nickname, saved_time))
-            partner_ids = [saved_chat.partner_id for saved_chat in saved_chats]
-            partners = {
-                partner.user_id: partner
-                for partner in [database.get_user(db, partner_id) for partner_id in partner_ids]
-                if partner is not None
-            }
     except Exception as e:
         logger.error(f"Failed to load saved chats for {user_id}: {e}")
         await update.message.reply_text("❌ Could not load saved chats right now. Please try again.")
         return
 
     if not saved_rows:
-    if not saved_chats:
         await update.message.reply_text("💾 You have no saved chats yet.")
         return
 
     lines = ["💾 Your Saved Chats"]
     for index, (nickname, saved_time) in enumerate(saved_rows, start=1):
-    for index, saved_chat in enumerate(saved_chats, start=1):
-        partner = partners.get(saved_chat.partner_id)
-        nickname = partner.nickname if partner else f"User {saved_chat.partner_id}"
-        saved_time = saved_chat.created_at.strftime("%Y-%m-%d %H:%M UTC")
         lines.append(f"{index}. {nickname} — {saved_time}")
 
     await update.message.reply_text("\n".join(lines))

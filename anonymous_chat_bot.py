@@ -1943,7 +1943,7 @@ async def handle_saved_reconnect_request_callback(query, context: ContextTypes.D
     reconnect_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')],
         [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
-        [InlineKeyboardButton("❌ Delete Request", callback_data='decline_reconnect')]
+        
     ])
 
     try:
@@ -1962,15 +1962,17 @@ async def handle_saved_reconnect_request_callback(query, context: ContextTypes.D
     requester_panel = build_requester_cancel_reconnect_markup()
     requester_panel = InlineKeyboardMarkup([
         [InlineKeyboardButton("🗑 Delete My Reconnect Request", callback_data='cancel_reconnect_request')]
-    ])
+        [InlineKeyboardButton("✅ Accept", callback_data=f"accept_reconnect_{user_id}")],
+        ])
+
+
     await context.bot.send_message(
         user_id,
         "⏳ Reconnect request sent. Partner received Accept/Delete panel.",
         reply_markup=requester_panel
     )
     await context.bot.send_message(user_id, "⏳ Waiting for partner acceptance...")
-        [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
-    ])
+        
 
     await context.bot.send_message(
         partner_id,

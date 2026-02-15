@@ -1711,6 +1711,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     save_requests[partner_id] = user_id
     request_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
+        [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
         [InlineKeyboardButton("❌ Delete Request", callback_data='decline_save')]
     ])
 
@@ -1903,6 +1904,7 @@ async def handle_saved_reconnect_request_callback(query, context: ContextTypes.D
     requester_name = requester.nickname if requester else "Your saved partner"
     reconnect_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')],
+        [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
         [InlineKeyboardButton("❌ Delete Request", callback_data='decline_reconnect')]
     ])
 

@@ -949,6 +949,10 @@ async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             InlineKeyboardButton(
                 f"🔄 Reconnect #{index}",
                 callback_data=f"reconnect_saved_{row['partner_id']}"
+            ),
+            InlineKeyboardButton(
+                f"🗑 Delete #{index}",
+                callback_data=f"delete_saved_{row['partner_id']}"
             )
         ])
 
@@ -1078,6 +1082,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data.startswith('reconnect_saved_'):
         await handle_saved_reconnect_request_callback(query, context)
+
+    elif data.startswith('delete_saved_'):
+        await handle_delete_saved_chat_callback(query, context)
 
     elif data == 'accept_reconnect':
         await handle_accept_reconnect_callback(query, context)
@@ -1636,6 +1643,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
 
     if already_saved:
         await query.answer("💾 This chat is already saved.", show_alert=True)
+        await context.bot.send_message(user_id, "💾 This chat is already saved for both users.")
         return
 
     if requester_count >= 3:
@@ -1644,6 +1652,10 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
 
     if partner_count >= 3:
         await query.answer("⚠️ Your partner already reached the max limit of 3 saved chats.", show_alert=True)
+        return
+
+    if partner_id in save_requests and save_requests[partner_id] != user_id:
+        await query.answer("⚠️ Partner already has a pending save request.", show_alert=True)
         return
 
     save_requests[partner_id] = user_id
@@ -1658,6 +1670,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
         reply_markup=request_buttons
     )
     await query.answer("💾 Save request sent to your partner.")
+    await context.bot.send_message(user_id, "⏳ Save request sent. Waiting for partner acceptance.")
 
 
 async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1824,6 +1837,37 @@ async def handle_decline_reconnect_callback(query, context: ContextTypes.DEFAULT
     await query.edit_message_text("❌ Reconnect request declined.")
     if requester_id:
         await context.bot.send_message(requester_id, "❌ Reconnect request declined by your saved partner.")
+
+
+async def handle_delete_saved_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Delete a saved chat from /saved list"""
+    user_id = query.from_user.id
+    callback_data = query.data
+
+    if not callback_data.startswith('delete_saved_'):
+        await query.answer("❌ Invalid delete request.", show_alert=True)
+        return
+
+    try:
+        partner_id = int(callback_data.split('delete_saved_')[1])
+    except ValueError:
+        await query.answer("❌ Invalid delete request.", show_alert=True)
+        return
+
+    try:
+        with database.get_db() as db:
+            deleted = database.delete_saved_chat(db, user_id, partner_id, delete_mutual=False)
+    except Exception as e:
+        logger.error(f"Delete saved chat failed for {user_id}: {e}")
+        await query.answer("❌ Could not delete saved chat right now.", show_alert=True)
+        return
+
+    if deleted <= 0:
+        await query.answer("⚠️ Saved chat was not found.", show_alert=True)
+        return
+
+    await query.answer("🗑 Saved chat deleted.")
+    await query.edit_message_text("✅ Saved chat deleted. Use /saved to refresh your list.")
 
 # Admin Functions
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -682,6 +682,7 @@ matchmaking = MatchmakingService()
 
 MAX_SAVED_CHATS = 3
 
+#<<<<<<< codex/add-saved-chat-feature-krgz1u
 def get_saved_chat_entries(db, user_id: int):
     """Return saved chat entries detached from ORM session"""
     saved_chats = database.get_saved_chats(db, user_id)
@@ -705,6 +706,28 @@ def build_saved_chats_text(saved_entries) -> str:
 
 
 def build_saved_chats_keyboard(saved_entries) -> InlineKeyboardMarkup:
+#=======
+#<<<<<<< codex/add-saved-chat-feature-botu7b
+def build_saved_chats_text(db, saved_chats) -> str:
+    """Build saved chats list text with partner nicknames"""
+    lines = [f"📌 Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})", ""]
+    for index, saved in enumerate(saved_chats, 1):
+        partner = database.get_user(db, saved.partner_id)
+        nickname = partner.nickname if partner else "Unknown"
+        saved_on = saved.created_at.strftime("%Y-%m-%d") if saved.created_at else "Unknown date"
+        lines.append(f"{index}. {nickname} • Saved on {saved_on}")
+#=======
+def build_saved_chats_text(saved_chats) -> str:
+    """Build an anonymous saved chats list text"""
+    lines = [f"📌 **Saved Chats ({len(saved_chats)}/{MAX_SAVED_CHATS})**", ""]
+    for index, saved in enumerate(saved_chats, 1):
+        saved_on = saved.created_at.strftime("%Y-%m-%d") if saved.created_at else "Unknown date"
+        lines.append(f"{index}. **Anonymous Chat {index}** • Saved on {saved_on}")
+#>>>>>>> master
+    return "\n".join(lines)
+
+def build_saved_chats_keyboard(saved_chats) -> InlineKeyboardMarkup:
+#>>>>>>> master
     """Build inline keyboard for saved chats list"""
     rows = []
     for index, entry in enumerate(saved_entries, 1):
@@ -777,6 +800,7 @@ async def save_current_partner(update: Update, context: ContextTypes.DEFAULT_TYP
             InlineKeyboardButton("❌ Decline", callback_data=f"decline_save_{request.id}")
         ]
     ])
+#<<<<<<< codex/add-saved-chat-feature-krgz1u
 
     try:
         await context.bot.send_message(
@@ -788,6 +812,19 @@ async def save_current_partner(update: Update, context: ContextTypes.DEFAULT_TYP
         await message.reply_text("❌ Failed to send save request right now.")
         return
 
+#=======
+
+    try:
+        await context.bot.send_message(
+            partner_id,
+            f"📌 Save Request\n\n{requester.nickname if requester else 'Someone'} wants to save this chat connection.\nAccept to save each other for future reconnect.",
+            reply_markup=actions
+        )
+    except TelegramError:
+        await message.reply_text("❌ Failed to send save request right now.")
+        return
+
+#>>>>>>> master
     await message.reply_text("✅ Save request sent. Waiting for partner approval.")
 
 async def show_saved_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -798,6 +835,7 @@ async def show_saved_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
     with database.get_db() as db:
+#<<<<<<< codex/add-saved-chat-feature-krgz1u
         saved_entries = get_saved_chat_entries(db, user_id)
         if not saved_entries:
             await message.reply_text(Messages.SAVED_LIST_EMPTY)
@@ -806,6 +844,26 @@ async def show_saved_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await message.reply_text(
         build_saved_chats_text(saved_entries),
         reply_markup=build_saved_chats_keyboard(saved_entries)
+#=======
+        saved_chats = database.get_saved_chats(db, user_id)
+        if not saved_chats:
+            await message.reply_text(Messages.SAVED_LIST_EMPTY)
+            return
+
+#<<<<<<< codex/add-saved-chat-feature-botu7b
+        saved_text = build_saved_chats_text(db, saved_chats)
+
+    await message.reply_text(
+        saved_text,
+#=======
+        saved_text = build_saved_chats_text(saved_chats)
+
+    await update.message.reply_text(
+        saved_text,
+        parse_mode='Markdown',
+#>>>>>>> master
+        reply_markup=build_saved_chats_keyboard(saved_chats)
+#>>>>>>> master
     )
 
 # Nicknames for users
@@ -1685,6 +1743,7 @@ async def handle_save_partner_callback(query, context: ContextTypes.DEFAULT_TYPE
     if not request:
         await query.answer(msg, show_alert=True)
         return
+#<<<<<<< codex/add-saved-chat-feature-krgz1u
 
     actions = InlineKeyboardMarkup([
         [
@@ -1720,6 +1779,61 @@ async def show_saved_chats_callback(query) -> None:
         build_saved_chats_text(saved_entries),
         reply_markup=build_saved_chats_keyboard(saved_entries)
     )
+#=======
+
+#<<<<<<< codex/add-saved-chat-feature-botu7b
+    actions = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Accept Save", callback_data=f"accept_save_{request.id}"),
+            InlineKeyboardButton("❌ Decline", callback_data=f"decline_save_{request.id}")
+        ]
+    ])
+
+    try:
+        await context.bot.send_message(
+            partner_id,
+            f"📌 Save Request\n\n{requester.nickname if requester else 'Someone'} wants to save this chat connection.\nAccept to save each other for future reconnect.",
+            reply_markup=actions
+        )
+    except TelegramError:
+        await query.answer("Could not deliver save request right now.", show_alert=True)
+        return
+
+    await query.answer("Save request sent.")
+
+#=======
+    await query.answer(msg, show_alert=not success)
+    if query.message:
+        await query.message.reply_text(("✅ " if success else "❌ ") + msg)
+#>>>>>>> master
+#>>>>>>> master
+
+async def show_saved_chats_callback(query) -> None:
+    """Display saved chats list from button callback"""
+    user_id = query.from_user.id
+
+    with database.get_db() as db:
+        saved_chats = database.get_saved_chats(db, user_id)
+#<<<<<<< codex/add-saved-chat-feature-botu7b
+        if not saved_chats:
+            await query.edit_message_text(Messages.SAVED_LIST_EMPTY)
+            return
+        saved_text = build_saved_chats_text(db, saved_chats)
+
+    await query.edit_message_text(
+        saved_text,
+#=======
+
+    if not saved_chats:
+        await query.edit_message_text(Messages.SAVED_LIST_EMPTY)
+        return
+
+    await query.edit_message_text(
+        build_saved_chats_text(saved_chats),
+        parse_mode='Markdown',
+#>>>>>>> master
+        reply_markup=build_saved_chats_keyboard(saved_chats)
+    )
 
 async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove one saved chat"""
@@ -1728,15 +1842,38 @@ async def handle_remove_saved_callback(query, context: ContextTypes.DEFAULT_TYPE
 
     with database.get_db() as db:
         removed = database.remove_saved_chat(db, user_id, partner_id)
+#<<<<<<< codex/add-saved-chat-feature-krgz1u
         saved_entries = get_saved_chat_entries(db, user_id)
 
-    if not saved_entries:
+    if not saved_entries
+      #=======
+        saved_chats = database.get_saved_chats(db, user_id)
+#<<<<<<< codex/add-saved-chat-feature-botu7b
+        if not saved_chats:
+            saved_text = None
+        else:
+            saved_text = build_saved_chats_text(db, saved_chats)
+#=======
+#>>>>>>> master
+
+    if not saved_chats:
+#>>>>>>> master
         await query.edit_message_text(Messages.SAVED_LIST_EMPTY, reply_markup=Keyboards.main_menu())
         return
 
     await query.edit_message_text(
+#<<<<<<< codex/add-saved-chat-feature-krgz1u
         build_saved_chats_text(saved_entries),
         reply_markup=build_saved_chats_keyboard(saved_entries)
+#=======
+#<<<<<<< codex/add-saved-chat-feature-botu7b
+        saved_text,
+#=======
+        build_saved_chats_text(saved_chats),
+        parse_mode='Markdown',
+#>>>>>>> master
+        reply_markup=build_saved_chats_keyboard(saved_chats)
+#>>>>>>> master
     )
     await query.answer("Removed." if removed else "Not found.")
 
@@ -1764,7 +1901,16 @@ async def handle_reconnect_request_callback(query, context: ContextTypes.DEFAULT
     try:
         await context.bot.send_message(
             target_id,
+#<<<<<<< codex/add-saved-chat-feature-krgz1u
             "🔔 Reconnect Request\n\nSomeone from your saved chats wants to reconnect with you.",
+#=======
+#<<<<<<< codex/add-saved-chat-feature-botu7b
+            "🔔 Reconnect Request\n\nSomeone from your saved chats wants to reconnect with you.",
+#=======
+            "🔔 **Reconnect Request**\n\nSomeone from your saved chats wants to reconnect with you.",
+            parse_mode='Markdown',
+#>>>>>>> master
+#>>>>>>> master
             reply_markup=actions
         )
     except TelegramError:

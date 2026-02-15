@@ -707,6 +707,37 @@ def cleanup_reconnect_requests(user_id: int, partner_id: Optional[int] = None) -
     for key in stale_keys:
         reconnect_requests.pop(key, None)
 
+def build_save_request_markup() -> InlineKeyboardMarkup:
+    """Build partner-facing save request action panel"""
+    buttons = [
+        [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
+        [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def build_reconnect_request_markup() -> InlineKeyboardMarkup:
+    """Build partner-facing reconnect request action panel"""
+    buttons = [
+        [InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')],
+        [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def build_requester_cancel_save_markup() -> InlineKeyboardMarkup:
+    """Build requester panel for canceling pending save request"""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗑 Delete My Save Request", callback_data='cancel_save_request')]
+    ])
+
+
+def build_requester_cancel_reconnect_markup() -> InlineKeyboardMarkup:
+    """Build requester panel for canceling pending reconnect request"""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗑 Delete My Reconnect Request", callback_data='cancel_reconnect_request')]
+    ])
+
 # Nicknames for users
 NICKNAMES = [
     'Phoenix', 'Shadow', 'Storm', 'Raven', 'Wolf', 'Tiger', 'Lion', 'Eagle', 'Bear', 'Fox',
@@ -1709,6 +1740,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     save_requests[partner_id] = user_id
+    request_buttons = build_save_request_markup()
     request_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
         [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
@@ -1728,6 +1760,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     await query.answer("💾 Save request sent", show_alert=False)
+    requester_panel = build_requester_cancel_save_markup()
     requester_panel = InlineKeyboardMarkup([
         [InlineKeyboardButton("🗑 Delete My Save Request", callback_data='cancel_save_request')]
     ])
@@ -1902,6 +1935,7 @@ async def handle_saved_reconnect_request_callback(query, context: ContextTypes.D
 
     reconnect_requests[partner_id] = user_id
     requester_name = requester.nickname if requester else "Your saved partner"
+    reconnect_buttons = build_reconnect_request_markup()
     reconnect_buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')],
         [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
@@ -1921,6 +1955,7 @@ async def handle_saved_reconnect_request_callback(query, context: ContextTypes.D
         return
 
     await query.answer("🔄 Reconnect request sent", show_alert=False)
+    requester_panel = build_requester_cancel_reconnect_markup()
     requester_panel = InlineKeyboardMarkup([
         [InlineKeyboardButton("🗑 Delete My Reconnect Request", callback_data='cancel_reconnect_request')]
     ])

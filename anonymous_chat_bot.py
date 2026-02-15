@@ -448,6 +448,7 @@ class Keyboards:
             [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
              InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
             [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
+            [InlineKeyboardButton("💾 Save Chat", callback_data='save_chat')],
             [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
              InlineKeyboardButton("🛑 End", callback_data='end_chat')],
             [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
@@ -674,6 +675,7 @@ class MatchmakingService:
 
 # Global service instance
 matchmaking = MatchmakingService()
+save_requests: Dict[int, int] = {}
 
 # Nicknames for users
 NICKNAMES = [
@@ -819,6 +821,8 @@ async def handle_skip_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     partner_id = await matchmaking.end_chat(user_id)
     
     if partner_id:
+        save_requests.pop(user_id, None)
+        save_requests.pop(partner_id, None)
         await update.message.reply_text(Messages.SKIPPED_CHAT)
         await context.bot.send_message(partner_id, Messages.PARTNER_SKIPPED, reply_markup=Keyboards.main_menu())
         
@@ -838,6 +842,8 @@ async def handle_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await matchmaking.remove_from_queue(user_id)
     
     if partner_id:
+        save_requests.pop(user_id, None)
+        save_requests.pop(partner_id, None)
         await update.message.reply_text(Messages.CHAT_ENDED, reply_markup=Keyboards.main_menu())
         await context.bot.send_message(partner_id, Messages.CHAT_ENDED_BY_PARTNER, reply_markup=Keyboards.main_menu())
     else:
@@ -866,6 +872,8 @@ async def handle_report_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # End the chat
     await matchmaking.end_chat(user_id)
+    save_requests.pop(user_id, None)
+    save_requests.pop(partner_id, None)
     await update.message.reply_text(Messages.REPORT_SENT, reply_markup=Keyboards.main_menu())
     
     if partner_id:
@@ -980,6 +988,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     elif data == 'report_user':
         await handle_report_user_callback(query, context)
+
+    elif data == 'save_chat':
+        await handle_save_chat_callback(query, context)
+
+    elif data == 'accept_save':
+        await handle_accept_save_callback(query, context)
+
+    elif data == 'decline_save':
+        await handle_decline_save_callback(query, context)
     
     elif data == 'back_to_chat':
         await query.edit_message_text(
@@ -1457,6 +1474,8 @@ async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     partner_id = await matchmaking.end_chat(user_id)
     
     if partner_id:
+        save_requests.pop(user_id, None)
+        save_requests.pop(partner_id, None)
         await query.edit_message_text(Messages.SKIPPED_CHAT)
         await context.bot.send_message(partner_id, Messages.PARTNER_SKIPPED, reply_markup=Keyboards.main_menu())
         
@@ -1475,6 +1494,8 @@ async def handle_end_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) ->
     await matchmaking.remove_from_queue(user_id)
     
     if partner_id:
+        save_requests.pop(user_id, None)
+        save_requests.pop(partner_id, None)
         await query.edit_message_text(Messages.CHAT_ENDED, reply_markup=Keyboards.main_menu())
         await context.bot.send_message(partner_id, Messages.CHAT_ENDED_BY_PARTNER, reply_markup=Keyboards.main_menu())
     else:
@@ -1499,10 +1520,96 @@ async def handle_report_user_callback(query, context: ContextTypes.DEFAULT_TYPE)
     
     # End the chat
     await matchmaking.end_chat(user_id)
+    save_requests.pop(user_id, None)
+    save_requests.pop(partner_id, None)
     await query.edit_message_text(Messages.REPORT_SENT, reply_markup=Keyboards.main_menu())
     
     if partner_id:
         await context.bot.send_message(partner_id, Messages.CHAT_ENDED_BY_PARTNER, reply_markup=Keyboards.main_menu())
+
+async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle save chat request initiation"""
+    user_id = query.from_user.id
+    partner_id = matchmaking.get_partner(user_id)
+
+    if not partner_id:
+        await query.answer("❌ Not in chat", show_alert=True)
+        return
+
+    with database.get_db() as db:
+        user_saved_count = database.count_saved_chats(db, user_id)
+        partner_saved_count = database.count_saved_chats(db, partner_id)
+
+    if user_saved_count >= 3:
+        await query.answer("⚠️ You already reached the max limit of 3 saved chats.", show_alert=True)
+        return
+
+    if partner_saved_count >= 3:
+        await query.answer("⚠️ Your partner already reached the max limit of 3 saved chats.", show_alert=True)
+        return
+
+    save_requests[partner_id] = user_id
+
+    request_buttons = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Accept", callback_data='accept_save'),
+            InlineKeyboardButton("❌ Decline", callback_data='decline_save')
+        ]
+    ])
+
+    await query.answer("💾 Save request sent")
+    await context.bot.send_message(
+        partner_id,
+        "💾 Your partner wants to save this chat. Accept?",
+        reply_markup=request_buttons
+    )
+
+async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle accepting a save request"""
+    user_id = query.from_user.id
+    requester_id = save_requests.get(user_id)
+
+    if not requester_id:
+        await query.answer("❌ No pending save request.", show_alert=True)
+        return
+
+    with database.get_db() as db:
+        user_saved_count = database.count_saved_chats(db, user_id)
+        requester_saved_count = database.count_saved_chats(db, requester_id)
+
+        if user_saved_count >= 3 or requester_saved_count >= 3:
+            save_requests.pop(user_id, None)
+            await query.answer("⚠️ Save failed. One user reached the max limit.", show_alert=True)
+            await query.edit_message_text("❌ Save request declined.")
+            try:
+                await context.bot.send_message(requester_id, "❌ Your save request could not be completed.")
+            except TelegramError:
+                pass
+            return
+
+        database.add_saved_chat(db, user_id, requester_id)
+        database.add_saved_chat(db, requester_id, user_id)
+
+    save_requests.pop(user_id, None)
+    await query.edit_message_text("✅ Chat saved!")
+
+    try:
+        await context.bot.send_message(requester_id, "✅ Your save request was accepted")
+    except TelegramError:
+        pass
+
+async def handle_decline_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle declining a save request"""
+    user_id = query.from_user.id
+    requester_id = save_requests.pop(user_id, None)
+
+    await query.edit_message_text("❌ Save request declined.")
+
+    if requester_id:
+        try:
+            await context.bot.send_message(requester_id, "❌ Your save request was declined.")
+        except TelegramError:
+            pass
 
 # Admin Functions
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

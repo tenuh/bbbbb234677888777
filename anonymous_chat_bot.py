@@ -1115,6 +1115,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data.startswith('save_decline_'):
         await handle_save_chat_response_callback(query, context, accepted=False)
+        await handle_save_chat_response_callback(query, accepted=True)
+
+    elif data.startswith('save_decline_'):
+        await handle_save_chat_response_callback(query, accepted=False)
 
     elif data == 'saved_refresh':
         text, keyboard = build_saved_chat_menu(user_id)
@@ -1605,6 +1609,7 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def handle_save_chat_response_callback(query, context: ContextTypes.DEFAULT_TYPE, accepted: bool) -> None:
+async def handle_save_chat_response_callback(query, accepted: bool) -> None:
     """Handle accept/decline for save-chat request"""
     responder_id = query.from_user.id
 
@@ -1623,6 +1628,7 @@ async def handle_save_chat_response_callback(query, context: ContextTypes.DEFAUL
 
     if matchmaking.get_partner(responder_id) != requester_id:
         pending_save_requests.discard(request_key)
+    if matchmaking.get_partner(responder_id) != requester_id:
         await query.answer("⚠️ This save request is no longer valid.", show_alert=True)
         return
 
@@ -1748,6 +1754,9 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
         await query.edit_message_text("⚠️ Reconnect failed because one user is busy now.")
         await query.bot.send_message(requester_id, "⚠️ Reconnect failed because one user is busy now.")
         return
+        matchmaking.active_sessions[requester_id] = responder_id
+        matchmaking.active_sessions[responder_id] = requester_id
+        database.create_chat_session(db, requester_id, responder_id)
 
     await query.edit_message_text(Messages.RECONNECT_ACCEPTED)
     await query.bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())

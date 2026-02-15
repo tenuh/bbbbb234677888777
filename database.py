@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Set
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship, scoped_session
+from sqlalchemy.orm import sessionmaker, relationship, scoped_session, synonym
 from sqlalchemy.dialects.postgresql import ARRAY
 from contextlib import contextmanager
 
@@ -126,12 +126,27 @@ class SavedChat(Base):
     __tablename__ = 'saved_chats'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+    # Keep DB column names compatible with older deployments that already use
+    # owner_user_id / partner_user_id.
+    owner_user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    partner_user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    alias = Column(String(100), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # App-level aliases used by bot code.
+    user_id = synonym('owner_user_id')
+    partner_id = synonym('partner_user_id')
+
+    __table_args__ = (
+        UniqueConstraint('owner_user_id', 'partner_user_id', name='uq_saved_chat_user_partner'),
     owner_user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
     partner_user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
         UniqueConstraint('owner_user_id', 'partner_user_id', name='uq_saved_chat_owner_partner'),
+#>>>>>>> master
     )
 
 
@@ -140,6 +155,12 @@ class SaveChatRequest(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     requester_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+    partner_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    status = Column(String(20), default='pending')  # pending/accepted/declined/cancelled
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+#=======
     target_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -147,6 +168,7 @@ class SaveChatRequest(Base):
         UniqueConstraint('requester_id', 'target_id', name='uq_save_chat_request_pair'),
     )
 
+#>>>>>>> master
 
 class ReconnectRequest(Base):
     __tablename__ = 'reconnect_requests'
@@ -154,13 +176,20 @@ class ReconnectRequest(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     requester_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
     target_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+    saved_chat_id = Column(Integer, ForeignKey('saved_chats.id'), nullable=True)
+    status = Column(String(20), default='pending')  # pending/accepted/declined/cancelled
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+#=======
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
         UniqueConstraint('requester_id', 'target_id', name='uq_reconnect_request_pair'),
     )
 
-@contextmanager
+#>>>>>>> master
+#@contextmanager
 def get_db():
     """Database session context manager"""
     db = SessionLocal()
@@ -204,6 +233,49 @@ def init_database():
                     conn.commit()
                 except Exception:
                     pass  # Column might already exist or other issue
+
+            # Saved chats compatibility migration:
+            # some deployments created saved_chats(user_id, partner_id), while
+            # others expect owner_user_id/partner_user_id.
+            try:
+                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS owner_user_id BIGINT"))
+                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS partner_user_id BIGINT"))
+                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS alias VARCHAR(100)"))
+
+                saved_chat_columns = {
+                    row[0]
+                    for row in conn.execute(text("""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = 'saved_chats'
+                    """)).fetchall()
+                }
+
+                if {'user_id', 'partner_id'}.issubset(saved_chat_columns):
+                    conn.execute(text("""
+                        UPDATE saved_chats
+                        SET owner_user_id = COALESCE(owner_user_id, user_id),
+                            partner_user_id = COALESCE(partner_user_id, partner_id)
+                    """))
+
+                conn.execute(text("""
+                    UPDATE saved_chats
+                    SET alias = COALESCE(alias, 'Anonymous')
+                """))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
+            # Best-effort unique constraint for normalized column names.
+            try:
+                conn.execute(text(
+                    "ALTER TABLE saved_chats "
+                    "ADD CONSTRAINT uq_saved_chat_user_partner "
+                    "UNIQUE (owner_user_id, partner_user_id)"
+                ))
+                conn.commit()
+            except Exception:
+                conn.rollback()
             
             logger.info("Database migration completed successfully")
     except Exception as e:
@@ -449,6 +521,55 @@ def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count:
         db.flush()
 
 
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+def get_saved_chats(db, user_id: int) -> List[SavedChat]:
+    """Return saved chats for a user."""
+    return db.query(SavedChat).filter(
+        SavedChat.user_id == user_id
+    ).order_by(SavedChat.created_at.desc()).all()
+
+
+def get_saved_chat_by_id(db, saved_chat_id: int, user_id: int) -> Optional[SavedChat]:
+    """Return one saved chat owned by user."""
+    return db.query(SavedChat).filter(
+        SavedChat.id == saved_chat_id,
+        SavedChat.user_id == user_id
+    ).first()
+
+
+def count_saved_chats(db, user_id: int) -> int:
+    """Count saved chats for a user."""
+    return db.query(SavedChat).filter(SavedChat.user_id == user_id).count()
+
+
+def get_saved_chat_pair(db, user_id: int, partner_id: int) -> Optional[SavedChat]:
+    """Return saved chat row for user-partner pair."""
+    return db.query(SavedChat).filter(
+        SavedChat.user_id == user_id,
+        SavedChat.partner_id == partner_id
+    ).first()
+
+
+def create_saved_chat_pair(db, user_a_id: int, user_b_id: int) -> bool:
+    """Create mutual saved chat rows for both users. Returns False on limit/existing."""
+    existing_a = get_saved_chat_pair(db, user_a_id, user_b_id)
+    existing_b = get_saved_chat_pair(db, user_b_id, user_a_id)
+    if existing_a and existing_b:
+        return True
+
+    if count_saved_chats(db, user_a_id) >= 3 or count_saved_chats(db, user_b_id) >= 3:
+        return False
+
+    user_a = get_user(db, user_a_id)
+    user_b = get_user(db, user_b_id)
+    if not user_a or not user_b:
+        return False
+
+    if not existing_a:
+        db.add(SavedChat(user_id=user_a_id, partner_id=user_b_id, alias=user_b.nickname))
+    if not existing_b:
+        db.add(SavedChat(user_id=user_b_id, partner_id=user_a_id, alias=user_a.nickname))
+#=======
 def get_saved_chats(db, owner_user_id: int) -> List[SavedChat]:
     """Get saved chats for a user"""
     return db.query(SavedChat).filter(
@@ -483,19 +604,39 @@ def delete_saved_chat(db, owner_user_id: int, partner_user_id: int) -> bool:
         return False
 
     db.delete(relation)
+#>>>>>>> master
     db.flush()
     return True
 
 
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+def remove_saved_chat_pair(db, user_id: int, partner_id: int):
+    """Remove saved chat rows for both users."""
+    db.query(SavedChat).filter(
+        ((SavedChat.user_id == user_id) & (SavedChat.partner_id == partner_id)) |
+        ((SavedChat.user_id == partner_id) & (SavedChat.partner_id == user_id))
+#=======
 def clear_save_chat_requests_between(db, user_a: int, user_b: int):
     """Delete save chat requests in both directions"""
     db.query(SaveChatRequest).filter(
         ((SaveChatRequest.requester_id == user_a) & (SaveChatRequest.target_id == user_b)) |
         ((SaveChatRequest.requester_id == user_b) & (SaveChatRequest.target_id == user_a))
+#>>>>>>> master
     ).delete(synchronize_session=False)
     db.flush()
 
 
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+def create_save_chat_request(db, requester_id: int, partner_id: int) -> SaveChatRequest:
+    """Create save-chat request and cancel older pending ones for the same pair."""
+    db.query(SaveChatRequest).filter(
+        SaveChatRequest.requester_id == requester_id,
+        SaveChatRequest.partner_id == partner_id,
+        SaveChatRequest.status == 'pending'
+    ).update({SaveChatRequest.status: 'cancelled'}, synchronize_session=False)
+
+    request = SaveChatRequest(requester_id=requester_id, partner_id=partner_id, status='pending')
+#=======
 def get_save_chat_request(db, requester_id: int, target_id: int) -> Optional[SaveChatRequest]:
     """Get a specific save chat request"""
     return db.query(SaveChatRequest).filter(
@@ -511,11 +652,41 @@ def create_save_chat_request(db, requester_id: int, target_id: int) -> Optional[
         return existing
 
     request = SaveChatRequest(requester_id=requester_id, target_id=target_id)
+#>>>>>>> master
     db.add(request)
     db.flush()
     return request
 
 
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+def get_save_chat_request(db, request_id: int) -> Optional[SaveChatRequest]:
+    """Get save-chat request by id."""
+    return db.query(SaveChatRequest).filter(SaveChatRequest.id == request_id).first()
+
+
+def create_reconnect_request(db, requester_id: int, target_id: int, saved_chat_id: Optional[int] = None) -> ReconnectRequest:
+    """Create reconnect request and cancel older pending from same requester to target."""
+    db.query(ReconnectRequest).filter(
+        ReconnectRequest.requester_id == requester_id,
+        ReconnectRequest.target_id == target_id,
+        ReconnectRequest.status == 'pending'
+    ).update({ReconnectRequest.status: 'cancelled'}, synchronize_session=False)
+
+    request = ReconnectRequest(
+        requester_id=requester_id,
+        target_id=target_id,
+        saved_chat_id=saved_chat_id,
+        status='pending'
+    )
+    db.add(request)
+    db.flush()
+    return request
+
+
+def get_reconnect_request(db, request_id: int) -> Optional[ReconnectRequest]:
+    """Get reconnect request by id."""
+    return db.query(ReconnectRequest).filter(ReconnectRequest.id == request_id).first()
+#=======
 def clear_reconnect_requests_between(db, user_a: int, user_b: int):
     """Delete reconnect requests in both directions"""
     db.query(ReconnectRequest).filter(
@@ -543,3 +714,4 @@ def create_reconnect_request(db, requester_id: int, target_id: int) -> Optional[
     db.add(request)
     db.flush()
     return request
+#>>>>>>> master

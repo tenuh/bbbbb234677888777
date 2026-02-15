@@ -228,6 +228,8 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
 • `/skip` - Find a new chat partner
 • `/stop` - End current chat session
 • `/report` - Report inappropriate behavior
+• `/save` - Request to save current chat partner
+• `/saved` - View your saved chat partners
 
 🎮 **Fun Features During Chat:**
 • 🎮 Play Games - Would You Rather, Truth or Dare, Two Truths & A Lie
@@ -439,7 +441,11 @@ class Keyboards:
     def main_menu():
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("💬 Find Partner", callback_data='find_partner')],
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+            [InlineKeyboardButton("💾 Saved Chats", callback_data='saved_list')],
+#=======
             [InlineKeyboardButton("💾 Saved Chats", callback_data='saved_chats')],
+#>>>>>>> master
             [InlineKeyboardButton("👤 My Profile", callback_data='view_profile'), 
              InlineKeyboardButton("❓ Help", callback_data='help_menu')],
             [InlineKeyboardButton("🔒 Privacy", callback_data='privacy_info')]
@@ -448,6 +454,7 @@ class Keyboards:
     @staticmethod
     def chat_controls():
         return InlineKeyboardMarkup([
+            [InlineKeyboardButton("💾 Save Chat", callback_data='save_chat_request')],
             [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
              InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
             [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile'),
@@ -455,6 +462,27 @@ class Keyboards:
             [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
              InlineKeyboardButton("🛑 End", callback_data='end_chat')],
             [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
+        ])
+
+    @staticmethod
+    def saved_chats_list(saved_chats: List[database.SavedChat]):
+        buttons = []
+        for chat in saved_chats:
+            buttons.append([
+                InlineKeyboardButton(
+                    f"💬 {chat.alias}",
+                    callback_data=f"saved_view_{chat.id}"
+                )
+            ])
+        buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')])
+        return InlineKeyboardMarkup(buttons)
+
+    @staticmethod
+    def saved_chat_actions(saved_chat_id: int):
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Reconnect", callback_data=f"saved_reconnect_{saved_chat_id}")],
+            [InlineKeyboardButton("🗑 Remove", callback_data=f"saved_remove_{saved_chat_id}")],
+            [InlineKeyboardButton("🔙 Back to Saved", callback_data='saved_list')]
         ])
     
     @staticmethod
@@ -676,6 +704,26 @@ class MatchmakingService:
                 reply_markup=Keyboards.main_menu()
             )
 
+    async def connect_users(self, user_a_id: int, user_b_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+        """Connect two users directly (used by reconnect flow)."""
+        async with self.lock:
+            if user_a_id in self.active_sessions or user_b_id in self.active_sessions:
+                return False
+
+            self.waiting_users.discard(user_a_id)
+            self.waiting_users.discard(user_b_id)
+
+            with database.get_db() as db:
+                if not database.get_user(db, user_a_id) or not database.get_user(db, user_b_id):
+                    return False
+                database.create_chat_session(db, user_a_id, user_b_id)
+
+            self.active_sessions[user_a_id] = user_b_id
+            self.active_sessions[user_b_id] = user_a_id
+
+        await self.notify_match(context, user_a_id, user_b_id)
+        return True
+
 # Global service instance
 matchmaking = MatchmakingService()
 
@@ -875,6 +923,66 @@ async def handle_report_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if partner_id:
         await context.bot.send_message(partner_id, Messages.CHAT_ENDED_BY_PARTNER, reply_markup=Keyboards.main_menu())
 
+
+async def save_chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /save command to request saving current partner."""
+    user_id = update.effective_user.id
+    partner_id = matchmaking.get_partner(user_id)
+
+    if not partner_id:
+        await update.message.reply_text("❌ You need to be in an active chat to save a partner.")
+        return
+
+    with database.get_db() as db:
+        if database.get_saved_chat_pair(db, user_id, partner_id):
+            await update.message.reply_text("✅ This partner is already in your saved chats.")
+            return
+
+        if database.count_saved_chats(db, user_id) >= 3:
+            await update.message.reply_text("❌ You already reached the maximum of 3 saved chats.")
+            return
+
+        if database.count_saved_chats(db, partner_id) >= 3:
+            await update.message.reply_text("⚠️ Your partner has reached their saved chat limit (3).")
+            return
+
+        request = database.create_save_chat_request(db, user_id, partner_id)
+        requester = database.get_user(db, user_id)
+
+    await update.message.reply_text("✅ Save request sent. Waiting for your partner to accept.")
+    await context.bot.send_message(
+        partner_id,
+        f"💾 **{requester.nickname} wants to save this chat partner connection.**\n\nAccept to save each other for future reconnects?",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Accept", callback_data=f"save_req_accept_{request.id}")],
+            [InlineKeyboardButton("❌ Decline", callback_data=f"save_req_decline_{request.id}")]
+        ])
+    )
+
+
+async def saved_chats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /saved command to view saved chat partners."""
+    user_id = update.effective_user.id
+
+    with database.get_db() as db:
+        saved_chats = database.get_saved_chats(db, user_id)
+
+    if not saved_chats:
+        await update.message.reply_text(
+            "💾 **Saved Chats**\n\nYou have no saved chats yet.\n\nTip: while chatting, tap **Save Chat** and both users must accept.",
+            parse_mode='Markdown',
+            reply_markup=Keyboards.main_menu()
+        )
+        return
+
+    await update.message.reply_text(
+        "💾 **Your Saved Chats**\n\nSelect a saved partner:",
+        parse_mode='Markdown',
+        reply_markup=Keyboards.saved_chats_list(saved_chats)
+    )
+
+
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /profile command"""
     await show_profile(update, context)
@@ -1034,8 +1142,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'view_profile':
         await show_profile_callback(query, context)
 
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+    elif data == 'saved_list':
+        await handle_saved_list_callback(query, context)
+#=======
     elif data == 'saved_chats':
         await show_saved_chats_by_user_id(user_id, context, query=query)
+#>>>>>>> master
     
     elif data == 'help_menu':
         await query.edit_message_text(
@@ -1071,8 +1184,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'report_user':
         await handle_report_user_callback(query, context)
 
+#<<<<<<< codex/add-saved-chat-feature-ybcovy
+    elif data == 'save_chat_request':
+        await handle_save_chat_request_callback(query, context)
+#=======
     elif data == 'save_current_chat':
         await handle_save_current_chat_callback(query, context)
+#>>>>>>> master
     
     elif data == 'back_to_chat':
         await query.edit_message_text(
@@ -1204,6 +1322,27 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             parse_mode='Markdown'
         )
     
+    elif data.startswith('save_req_accept_'):
+        await handle_save_request_decision_callback(query, context, accepted=True)
+
+    elif data.startswith('save_req_decline_'):
+        await handle_save_request_decision_callback(query, context, accepted=False)
+
+    elif data.startswith('saved_view_'):
+        await handle_saved_view_callback(query, context)
+
+    elif data.startswith('saved_reconnect_'):
+        await handle_saved_reconnect_callback(query, context)
+
+    elif data.startswith('saved_remove_'):
+        await handle_saved_remove_callback(query, context)
+
+    elif data.startswith('reconnect_accept_'):
+        await handle_reconnect_decision_callback(query, context, accepted=True)
+
+    elif data.startswith('reconnect_decline_'):
+        await handle_reconnect_decision_callback(query, context, accepted=False)
+
     elif data.startswith('gift_'):
         emoji = data.replace('gift_', '')
         gift_name = VirtualGifts.GIFTS.get(emoji, 'Gift')
@@ -1299,6 +1438,233 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Admin panel
     elif data.startswith('admin_') and is_admin(user_id):
         await handle_admin_callback(query, context)
+
+
+async def handle_saved_list_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show saved chats list."""
+    user_id = query.from_user.id
+    with database.get_db() as db:
+        saved_chats = database.get_saved_chats(db, user_id)
+
+    if not saved_chats:
+        await query.edit_message_text(
+            "💾 **Saved Chats**\n\nYou have no saved chats yet.\n\nTip: while chatting, tap **Save Chat** and both users must accept.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]])
+        )
+        return
+
+    await query.edit_message_text(
+        "💾 **Your Saved Chats**\n\nSelect a saved partner:",
+        parse_mode='Markdown',
+        reply_markup=Keyboards.saved_chats_list(saved_chats)
+    )
+
+
+async def handle_save_chat_request_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Request partner approval to save the current chat."""
+    user_id = query.from_user.id
+    partner_id = matchmaking.get_partner(user_id)
+
+    if not partner_id:
+        await query.answer("You're not in a chat.", show_alert=True)
+        return
+
+    with database.get_db() as db:
+        if database.get_saved_chat_pair(db, user_id, partner_id):
+            await query.answer("Already saved.", show_alert=True)
+            return
+
+        if database.count_saved_chats(db, user_id) >= 3:
+            await query.answer("You reached max 3 saved chats.", show_alert=True)
+            return
+
+        if database.count_saved_chats(db, partner_id) >= 3:
+            await query.answer("Partner reached max 3 saved chats.", show_alert=True)
+            return
+
+        request = database.create_save_chat_request(db, user_id, partner_id)
+        requester = database.get_user(db, user_id)
+
+    await query.answer("Save request sent!")
+    await context.bot.send_message(
+        partner_id,
+        f"💾 **{requester.nickname} wants to save this chat partner connection.**\n\nAccept to save each other for future reconnects?",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Accept", callback_data=f"save_req_accept_{request.id}")],
+            [InlineKeyboardButton("❌ Decline", callback_data=f"save_req_decline_{request.id}")]
+        ])
+    )
+
+
+async def handle_save_request_decision_callback(query, context: ContextTypes.DEFAULT_TYPE, accepted: bool) -> None:
+    """Handle accept/decline for save chat request."""
+    user_id = query.from_user.id
+    request_id = int(query.data.rsplit('_', 1)[-1])
+
+    with database.get_db() as db:
+        request = database.get_save_chat_request(db, request_id)
+        if not request or request.status != 'pending' or request.partner_id != user_id:
+            await query.answer("This request is no longer available.", show_alert=True)
+            return
+
+        requester = database.get_user(db, request.requester_id)
+        if not requester:
+            request.status = 'cancelled'
+            await query.answer("Requester unavailable.", show_alert=True)
+            return
+
+        if not accepted:
+            request.status = 'declined'
+            await query.edit_message_text("❌ You declined the save request.")
+            await context.bot.send_message(request.requester_id, "❌ Your save request was declined.")
+            return
+
+        if database.count_saved_chats(db, request.requester_id) >= 3 or database.count_saved_chats(db, request.partner_id) >= 3:
+            request.status = 'cancelled'
+            await query.edit_message_text("⚠️ Could not save. One user has reached the max 3 saved chats.")
+            await context.bot.send_message(request.requester_id, "⚠️ Save request failed because one user reached max 3 saved chats.")
+            return
+
+        created = database.create_saved_chat_pair(db, request.requester_id, request.partner_id)
+        request.status = 'accepted' if created else 'cancelled'
+
+    if accepted and created:
+        await query.edit_message_text("✅ Saved! This chat partner is now in your saved chats.")
+        await context.bot.send_message(request.requester_id, "✅ Your partner accepted. Chat saved for both of you.")
+
+
+async def handle_saved_view_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show selected saved chat details."""
+    user_id = query.from_user.id
+    saved_chat_id = int(query.data.rsplit('_', 1)[-1])
+
+    with database.get_db() as db:
+        saved_chat = database.get_saved_chat_by_id(db, saved_chat_id, user_id)
+        if not saved_chat:
+            await query.answer("Saved chat not found.", show_alert=True)
+            return
+
+        partner = database.get_user(db, saved_chat.partner_id)
+
+    status = "🟢 Available"
+    if matchmaking.get_partner(saved_chat.partner_id):
+        status = "🟠 Busy in another chat"
+
+    if not partner:
+        status = "⚫ Unavailable"
+
+    details = (
+        "💾 **Saved Chat Details**\n\n"
+        f"🎭 Nickname: **{saved_chat.alias}**\n"
+        f"📅 Saved on: {saved_chat.created_at.strftime('%Y-%m-%d %H:%M')} UTC\n"
+        f"📶 Status: {status}\n\n"
+        "No usernames or personal IDs are shared."
+    )
+
+    await query.edit_message_text(
+        details,
+        parse_mode='Markdown',
+        reply_markup=Keyboards.saved_chat_actions(saved_chat.id)
+    )
+
+
+async def handle_saved_reconnect_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send reconnect request to a saved partner."""
+    user_id = query.from_user.id
+    saved_chat_id = int(query.data.rsplit('_', 1)[-1])
+
+    if matchmaking.get_partner(user_id):
+        await query.answer("End current chat before reconnecting.", show_alert=True)
+        return
+
+    with database.get_db() as db:
+        saved_chat = database.get_saved_chat_by_id(db, saved_chat_id, user_id)
+        if not saved_chat:
+            await query.answer("Saved chat not found.", show_alert=True)
+            return
+
+        target_id = saved_chat.partner_id
+        request = database.create_reconnect_request(db, user_id, target_id, saved_chat_id=saved_chat.id)
+        requester = database.get_user(db, user_id)
+
+    await query.answer("Reconnect request sent.")
+    await context.bot.send_message(
+        target_id,
+        f"🔄 **Reconnect Request**\n\n**{requester.nickname}** from your saved chats wants to reconnect.",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Accept", callback_data=f"reconnect_accept_{request.id}")],
+            [InlineKeyboardButton("❌ Decline", callback_data=f"reconnect_decline_{request.id}")]
+        ])
+    )
+
+
+async def handle_reconnect_decision_callback(query, context: ContextTypes.DEFAULT_TYPE, accepted: bool) -> None:
+    """Handle reconnect accept/decline actions."""
+    user_id = query.from_user.id
+    request_id = int(query.data.rsplit('_', 1)[-1])
+
+    with database.get_db() as db:
+        request = database.get_reconnect_request(db, request_id)
+        if not request or request.status != 'pending' or request.target_id != user_id:
+            await query.answer("This reconnect request is no longer available.", show_alert=True)
+            return
+
+        requester = database.get_user(db, request.requester_id)
+        if not requester:
+            request.status = 'cancelled'
+            await query.answer("Requester unavailable.", show_alert=True)
+            return
+
+        if not accepted:
+            request.status = 'declined'
+            await query.edit_message_text("❌ Reconnect request declined.")
+            await context.bot.send_message(request.requester_id, "❌ Your reconnect request was declined.")
+            return
+
+        if matchmaking.get_partner(request.requester_id) or matchmaking.get_partner(request.target_id):
+            request.status = 'cancelled'
+            await query.edit_message_text("⚠️ Reconnect failed because one user is currently busy.")
+            await context.bot.send_message(request.requester_id, "⚠️ Reconnect failed because one user is busy.")
+            return
+
+        request.status = 'accepted'
+
+    success = await matchmaking.connect_users(request.requester_id, request.target_id, context)
+    if success:
+        await query.edit_message_text("✅ Reconnect accepted. You are now connected again.")
+    else:
+        await query.edit_message_text("⚠️ Could not reconnect now. Please try again later.")
+        await context.bot.send_message(request.requester_id, "⚠️ Could not reconnect right now.")
+
+
+async def handle_saved_remove_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove a saved chat pair for both users."""
+    user_id = query.from_user.id
+    saved_chat_id = int(query.data.rsplit('_', 1)[-1])
+
+    with database.get_db() as db:
+        saved_chat = database.get_saved_chat_by_id(db, saved_chat_id, user_id)
+        if not saved_chat:
+            await query.answer("Saved chat not found.", show_alert=True)
+            return
+
+        partner_id = saved_chat.partner_id
+        partner = database.get_user(db, partner_id)
+        alias = saved_chat.alias
+        database.remove_saved_chat_pair(db, user_id, partner_id)
+
+    await query.edit_message_text(
+        f"🗑 Removed **{alias}** from saved chats.",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Saved", callback_data='saved_list')]])
+    )
+
+    if partner:
+        await context.bot.send_message(partner_id, "ℹ️ A saved chat connection was removed.")
+
 
 async def handle_gender_selection(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle gender selection during registration"""
@@ -2423,6 +2789,8 @@ def main() -> None:
     application.add_handler(CommandHandler("skip", skip_command))
     application.add_handler(CommandHandler("stop", stop_command))
     application.add_handler(CommandHandler("report", report_command))
+    application.add_handler(CommandHandler("save", save_chat_command))
+    application.add_handler(CommandHandler("saved", saved_chats_command))
     application.add_handler(CommandHandler("profile", profile_command))
     application.add_handler(CommandHandler("saved", saved_command))
     application.add_handler(CommandHandler("help", help_command))
@@ -2443,6 +2811,8 @@ def main() -> None:
             BotCommand("find", "Find a chat partner"),
             BotCommand("skip", "Skip current chat partner"),
             BotCommand("stop", "End current chat"),
+            BotCommand("save", "Request to save current chat partner"),
+            BotCommand("saved", "View saved chat partners"),
             BotCommand("profile", "View/edit your profile"),
             BotCommand("saved", "Open saved chats and reconnect"),
             BotCommand("viewonce", "Send a view-once disappearing photo"),

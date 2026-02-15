@@ -462,3 +462,21 @@ def list_saved_chats(db, user_id: int) -> List[SavedChat]:
     return db.query(SavedChat).filter(
         SavedChat.user_id == user_id
     ).order_by(SavedChat.created_at.desc()).all()
+
+def delete_saved_chat(db, user_id: int, partner_id: int, delete_mutual: bool = False) -> int:
+    """Delete saved chat for one side, or both sides if delete_mutual=True"""
+    query = db.query(SavedChat).filter(
+        SavedChat.user_id == user_id,
+        SavedChat.partner_id == partner_id
+    )
+    deleted = query.delete(synchronize_session=False)
+
+    if delete_mutual:
+        deleted += db.query(SavedChat).filter(
+            SavedChat.user_id == partner_id,
+            SavedChat.partner_id == user_id
+        ).delete(synchronize_session=False)
+
+    db.flush()
+    return deleted
+

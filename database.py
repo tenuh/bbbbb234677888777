@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Set
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -120,6 +120,20 @@ class BroadcastMessage(Base):
     failed_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+
+class SavedChat(Base):
+    __tablename__ = 'saved_chats'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'saved_user_id', name='uq_saved_chat_pair'),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    saved_user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+    saved_user = relationship("User", foreign_keys=[saved_user_id])
 
 @contextmanager
 def get_db():
@@ -408,3 +422,24 @@ def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count:
         broadcast.failed_count = failed_count
         broadcast.completed_at = datetime.utcnow()
         db.flush()
+
+def add_saved_chat(db, user_id: int, saved_user_id: int) -> bool:
+    """Save a chat partner for a user if not already saved."""
+    if user_id == saved_user_id:
+        return False
+
+    existing = db.query(SavedChat).filter(
+        SavedChat.user_id == user_id,
+        SavedChat.saved_user_id == saved_user_id
+    ).first()
+    if existing:
+        return False
+
+    saved_chat = SavedChat(user_id=user_id, saved_user_id=saved_user_id)
+    db.add(saved_chat)
+    db.flush()
+    return True
+
+def count_saved_chats(db, user_id: int) -> int:
+    """Count how many chats are saved by this user."""
+    return db.query(SavedChat).filter(SavedChat.user_id == user_id).count()

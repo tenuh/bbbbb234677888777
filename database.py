@@ -203,48 +203,57 @@ def init_database():
                 except Exception:
                     pass  # Column might already exist or other issue
 
-            # Saved chats compatibility migration:
-            # some deployments created saved_chats(user_id, partner_id), while
-            # others expect owner_user_id/partner_user_id.
-            try:
-                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS owner_user_id BIGINT"))
-                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS partner_user_id BIGINT"))
-                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS alias VARCHAR(100)"))
+            saved_chats_exists = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'saved_chats'
+                )
+            """)).scalar()
 
-                saved_chat_columns = {
-                    row[0]
-                    for row in conn.execute(text("""
-                        SELECT column_name
-                        FROM information_schema.columns
-                        WHERE table_schema = 'public' AND table_name = 'saved_chats'
-                    """)).fetchall()
-                }
+            if saved_chats_exists:
+                # Saved chats compatibility migration:
+                # some deployments created saved_chats(user_id, partner_id), while
+                # others expect owner_user_id/partner_user_id.
+                try:
+                    conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS owner_user_id BIGINT"))
+                    conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS partner_user_id BIGINT"))
+                    conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS alias VARCHAR(100)"))
 
-                if {'user_id', 'partner_id'}.issubset(saved_chat_columns):
+                    saved_chat_columns = {
+                        row[0]
+                        for row in conn.execute(text("""
+                            SELECT column_name
+                            FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'saved_chats'
+                        """)).fetchall()
+                    }
+
+                    if {'user_id', 'partner_id'}.issubset(saved_chat_columns):
+                        conn.execute(text("""
+                            UPDATE saved_chats
+                            SET owner_user_id = COALESCE(owner_user_id, user_id),
+                                partner_user_id = COALESCE(partner_user_id, partner_id)
+                        """))
+
                     conn.execute(text("""
                         UPDATE saved_chats
-                        SET owner_user_id = COALESCE(owner_user_id, user_id),
-                            partner_user_id = COALESCE(partner_user_id, partner_id)
+                        SET alias = COALESCE(alias, 'Anonymous')
                     """))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
 
-                conn.execute(text("""
-                    UPDATE saved_chats
-                    SET alias = COALESCE(alias, 'Anonymous')
-                """))
-                conn.commit()
-            except Exception:
-                conn.rollback()
-
-            # Best-effort unique constraint for normalized column names.
-            try:
-                conn.execute(text(
-                    "ALTER TABLE saved_chats "
-                    "ADD CONSTRAINT uq_saved_chat_user_partner "
-                    "UNIQUE (owner_user_id, partner_user_id)"
-                ))
-                conn.commit()
-            except Exception:
-                conn.rollback()
+                # Best-effort unique constraint for normalized column names.
+                try:
+                    conn.execute(text(
+                        "ALTER TABLE saved_chats "
+                        "ADD CONSTRAINT uq_saved_chat_user_partner "
+                        "UNIQUE (owner_user_id, partner_user_id)"
+                    ))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
             
             logger.info("Database migration completed successfully")
     except Exception as e:

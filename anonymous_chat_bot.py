@@ -238,6 +238,7 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
 
 👤 **Profile:**
 • `/profile` - View/edit your profile
+• `/saved` - View your mutually saved chats
 • `/interests` - Set your interests
 • 😊 Set Mood - Show your current vibe
 
@@ -448,6 +449,7 @@ class Keyboards:
             [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
              InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
             [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
+            [InlineKeyboardButton("💾 Save Chat", callback_data='save_chat')],
             [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
              InlineKeyboardButton("🛑 End", callback_data='end_chat')],
             [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
@@ -674,6 +676,67 @@ class MatchmakingService:
 
 # Global service instance
 matchmaking = MatchmakingService()
+save_requests: Dict[int, int] = {}
+reconnect_requests: Dict[int, int] = {}
+
+
+def cleanup_save_requests(user_id: int, partner_id: Optional[int] = None) -> None:
+    """Clear pending save requests for ended chats"""
+    save_requests.pop(user_id, None)
+    if partner_id is not None:
+        save_requests.pop(partner_id, None)
+
+    stale_keys = [
+        key for key, requester_id in save_requests.items()
+        if requester_id == user_id or (partner_id is not None and requester_id == partner_id)
+    ]
+    for key in stale_keys:
+        save_requests.pop(key, None)
+
+
+def cleanup_reconnect_requests(user_id: int, partner_id: Optional[int] = None) -> None:
+    """Clear pending reconnect requests for ended chats"""
+    reconnect_requests.pop(user_id, None)
+    if partner_id is not None:
+        reconnect_requests.pop(partner_id, None)
+
+    stale_keys = [
+        key for key, requester_id in reconnect_requests.items()
+        if requester_id == user_id or (partner_id is not None and requester_id == partner_id)
+    ]
+    for key in stale_keys:
+        reconnect_requests.pop(key, None)
+
+def build_save_request_markup() -> InlineKeyboardMarkup:
+    """Build partner-facing save request action panel"""
+    buttons = [
+        [InlineKeyboardButton("✅ Accept", callback_data='accept_save')],
+        [InlineKeyboardButton("❌ Decline", callback_data='decline_save')]
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def build_reconnect_request_markup() -> InlineKeyboardMarkup:
+    """Build partner-facing reconnect request action panel"""
+    buttons = [
+        [InlineKeyboardButton("✅ Accept Reconnect", callback_data='accept_reconnect')],
+        [InlineKeyboardButton("❌ Decline", callback_data='decline_reconnect')]
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def build_requester_cancel_save_markup() -> InlineKeyboardMarkup:
+    """Build requester panel for canceling pending save request"""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗑 Delete My Save Request", callback_data='cancel_save_request')]
+    ])
+
+
+def build_requester_cancel_reconnect_markup() -> InlineKeyboardMarkup:
+    """Build requester panel for canceling pending reconnect request"""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗑 Delete My Reconnect Request", callback_data='cancel_reconnect_request')]
+    ])
 
 # Nicknames for users
 NICKNAMES = [
@@ -817,6 +880,8 @@ async def handle_skip_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Handle skipping current chat"""
     user_id = update.effective_user.id
     partner_id = await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
+    cleanup_reconnect_requests(user_id, partner_id)
     
     if partner_id:
         await update.message.reply_text(Messages.SKIPPED_CHAT)
@@ -835,6 +900,8 @@ async def handle_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Handle ending chat"""
     user_id = update.effective_user.id
     partner_id = await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
+    cleanup_reconnect_requests(user_id, partner_id)
     await matchmaking.remove_from_queue(user_id)
     
     if partner_id:
@@ -866,6 +933,8 @@ async def handle_report_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # End the chat
     await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
+    cleanup_reconnect_requests(user_id, partner_id)
     await update.message.reply_text(Messages.REPORT_SENT, reply_markup=Keyboards.main_menu())
     
     if partner_id:
@@ -874,6 +943,62 @@ async def handle_report_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /profile command"""
     await show_profile(update, context)
+
+
+async def build_saved_panel(user_id: int) -> tuple:
+    """Build saved list text and keyboard panel"""
+    saved_rows = []
+
+    with database.get_db() as db:
+        saved_chats = database.list_saved_chats(db, user_id)
+        for saved_chat in saved_chats:
+            partner = database.get_user(db, saved_chat.partner_id)
+            nickname = partner.nickname if partner else f"User {saved_chat.partner_id}"
+            saved_time = saved_chat.created_at.strftime("%Y-%m-%d %H:%M UTC")
+            saved_rows.append({
+                'partner_id': saved_chat.partner_id,
+                'nickname': nickname,
+                'saved_time': saved_time
+            })
+
+    if not saved_rows:
+        text = "💾 Your saved chat list is empty."
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Refresh", callback_data='refresh_saved_list')]
+        ])
+        return text, keyboard
+
+    lines = ["💾 Saved Chat Panel"]
+    keyboard_rows = []
+    for index, row in enumerate(saved_rows, start=1):
+        lines.append(f"{index}. {row['nickname']} — {row['saved_time']}")
+        keyboard_rows.append([
+            InlineKeyboardButton(
+                f"🔄 Reconnect #{index}",
+                callback_data=f"reconnect_saved_{row['partner_id']}"
+            ),
+            InlineKeyboardButton(
+                f"🗑 Remove #{index}",
+                callback_data=f"delete_saved_{row['partner_id']}"
+            )
+        ])
+
+    keyboard_rows.append([InlineKeyboardButton("🔄 Refresh", callback_data='refresh_saved_list')])
+    return "\n".join(lines), InlineKeyboardMarkup(keyboard_rows)
+
+
+async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /saved command"""
+    user_id = update.effective_user.id
+
+    try:
+        text, keyboard = await build_saved_panel(user_id)
+    except Exception as e:
+        logger.error(f"Failed to load saved chats for {user_id}: {e}")
+        await update.message.reply_text("❌ Could not load saved chats right now. Please try again.")
+        return
+
+    await update.message.reply_text(text, reply_markup=keyboard)
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show user profile"""
@@ -931,8 +1056,7 @@ async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle all button callbacks"""
     query = update.callback_query
-    await query.answer()
-    
+
     user_id = query.from_user.id
     data = query.data
     
@@ -980,6 +1104,36 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     elif data == 'report_user':
         await handle_report_user_callback(query, context)
+
+    elif data == 'save_chat':
+        await handle_save_chat_callback(query, context)
+
+    elif data == 'accept_save':
+        await handle_accept_save_callback(query, context)
+
+    elif data == 'decline_save':
+        await handle_decline_save_callback(query, context)
+
+    elif data == 'cancel_save_request':
+        await handle_cancel_save_request_callback(query, context)
+
+    elif data.startswith('reconnect_saved_'):
+        await handle_saved_reconnect_request_callback(query, context)
+
+    elif data.startswith('delete_saved_'):
+        await handle_delete_saved_chat_callback(query, context)
+
+    elif data == 'refresh_saved_list':
+        await handle_refresh_saved_list_callback(query, context)
+
+    elif data == 'accept_reconnect':
+        await handle_accept_reconnect_callback(query, context)
+
+    elif data == 'decline_reconnect':
+        await handle_decline_reconnect_callback(query, context)
+
+    elif data == 'cancel_reconnect_request':
+        await handle_cancel_reconnect_request_callback(query, context)
     
     elif data == 'back_to_chat':
         await query.edit_message_text(
@@ -1455,6 +1609,8 @@ async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     """Handle skip chat button callback"""
     user_id = query.from_user.id
     partner_id = await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
+    cleanup_reconnect_requests(user_id, partner_id)
     
     if partner_id:
         await query.edit_message_text(Messages.SKIPPED_CHAT)
@@ -1472,6 +1628,8 @@ async def handle_end_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) ->
     """Handle end chat button callback"""
     user_id = query.from_user.id
     partner_id = await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
+    cleanup_reconnect_requests(user_id, partner_id)
     await matchmaking.remove_from_queue(user_id)
     
     if partner_id:
@@ -1499,10 +1657,342 @@ async def handle_report_user_callback(query, context: ContextTypes.DEFAULT_TYPE)
     
     # End the chat
     await matchmaking.end_chat(user_id)
+    cleanup_save_requests(user_id, partner_id)
+    cleanup_reconnect_requests(user_id, partner_id)
     await query.edit_message_text(Messages.REPORT_SENT, reply_markup=Keyboards.main_menu())
     
     if partner_id:
         await context.bot.send_message(partner_id, Messages.CHAT_ENDED_BY_PARTNER, reply_markup=Keyboards.main_menu())
+
+
+async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle save chat request"""
+    user_id = query.from_user.id
+    partner_id = matchmaking.get_partner(user_id)
+
+    if not partner_id:
+        await query.answer("❌ Not in chat", show_alert=True)
+        return
+
+    try:
+        with database.get_db() as db:
+            requester_count = database.count_saved_chats(db, user_id)
+            partner_count = database.count_saved_chats(db, partner_id)
+            already_saved = database.has_saved_chat(db, user_id, partner_id)
+    except Exception as e:
+        logger.error(f"Save chat precheck failed for {user_id}: {e}")
+        await query.answer("❌ Save system is temporarily unavailable.", show_alert=True)
+        return
+
+    if already_saved:
+        await query.answer("💾 This chat is already saved.", show_alert=True)
+        await context.bot.send_message(user_id, "💾 Already saved. This chat is already in your saved list.")
+        return
+
+    if requester_count >= 3:
+        await query.answer("⚠️ You already reached the max limit of 3 saved chats.", show_alert=True)
+        return
+
+    if partner_count >= 3:
+        await query.answer("⚠️ Your partner already reached the max limit of 3 saved chats.", show_alert=True)
+        return
+
+    if partner_id in save_requests and save_requests[partner_id] != user_id:
+        await query.answer("⚠️ Partner already has a pending save request.", show_alert=True)
+        return
+
+    save_requests[partner_id] = user_id
+    request_buttons = build_save_request_markup()
+
+    try:
+        await context.bot.send_message(
+            partner_id,
+            "💾 Your partner wants to save this chat. Accept?",
+            reply_markup=request_buttons
+        )
+    except Exception as e:
+        save_requests.pop(partner_id, None)
+        logger.error(f"Failed to send save request panel from {user_id} to {partner_id}: {e}")
+        await query.answer("❌ Could not send save request to partner.", show_alert=True)
+        return
+
+    await query.answer("💾 Save request sent", show_alert=False)
+    requester_panel = build_requester_cancel_save_markup()
+    await context.bot.send_message(
+        user_id,
+        "⏳ Save request sent. Partner received Accept/Delete panel.",
+        reply_markup=requester_panel
+    )
+
+
+async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle accepting a save chat request"""
+    user_id = query.from_user.id
+    requester_id = save_requests.pop(user_id, None)
+
+    if not requester_id:
+        await query.answer("❌ No pending save request.", show_alert=True)
+        return
+
+    if matchmaking.get_partner(user_id) != requester_id:
+        await query.edit_message_text("❌ Save request expired.")
+        await context.bot.send_message(requester_id, "❌ Your save request expired.")
+        return
+
+    try:
+        with database.get_db() as db:
+            requester_count = database.count_saved_chats(db, requester_id)
+            accepter_count = database.count_saved_chats(db, user_id)
+            if requester_count >= 3 or accepter_count >= 3:
+                await query.edit_message_text("⚠️ Save failed: one user reached the 3-chat limit.")
+                await context.bot.send_message(requester_id, "⚠️ Save failed because one user reached the 3-chat limit.")
+                return
+
+            saved = database.save_chat_mutual(db, requester_id, user_id)
+    except Exception as e:
+        logger.error(f"Save accept failed for requester {requester_id} and accepter {user_id}: {e}")
+        await query.edit_message_text("❌ Failed to save chat. Please try again later.")
+        await context.bot.send_message(requester_id, "❌ Your save request failed due to a temporary issue.")
+        return
+
+    if not saved:
+        await query.edit_message_text("💾 This chat was already saved.")
+        await context.bot.send_message(requester_id, "💾 Your chat was already saved earlier.")
+        return
+
+    await query.edit_message_text("✅ Save accepted. Chat saved for both users.")
+    await context.bot.send_message(user_id, "✅ Save done. Chat saved for both users.")
+    await context.bot.send_message(requester_id, "✅ Save done. Partner accepted and chat saved for both users.")
+
+
+async def handle_decline_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle declining a save chat request"""
+    user_id = query.from_user.id
+    requester_id = save_requests.pop(user_id, None)
+
+    await query.edit_message_text("❌ Save request declined.")
+    if requester_id:
+        await context.bot.send_message(requester_id, "❌ Your save request was declined.")
+
+
+async def handle_cancel_save_request_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Requester cancels their own pending save request"""
+    user_id = query.from_user.id
+    cancelled_partner = None
+
+    for partner_id, requester_id in list(save_requests.items()):
+        if requester_id == user_id:
+            cancelled_partner = partner_id
+            save_requests.pop(partner_id, None)
+            break
+
+    if not cancelled_partner:
+        await query.answer("❌ No pending save request to delete.", show_alert=True)
+        return
+
+    await query.answer("🗑 Save request deleted.", show_alert=False)
+    await query.edit_message_text("✅ Your save request was deleted.")
+    try:
+        await context.bot.send_message(cancelled_partner, "⚠️ Save request was deleted by requester.")
+    except Exception:
+        pass
+
+
+async def handle_cancel_reconnect_request_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Requester cancels their own pending reconnect request"""
+    user_id = query.from_user.id
+    cancelled_partner = None
+
+    for partner_id, requester_id in list(reconnect_requests.items()):
+        if requester_id == user_id:
+            cancelled_partner = partner_id
+            reconnect_requests.pop(partner_id, None)
+            break
+
+    if not cancelled_partner:
+        await query.answer("❌ No pending reconnect request to delete.", show_alert=True)
+        return
+
+    await query.answer("🗑 Reconnect request deleted.", show_alert=False)
+    await query.edit_message_text("✅ Your reconnect request was deleted.")
+    try:
+        await context.bot.send_message(cancelled_partner, "⚠️ Reconnect request was deleted by requester.")
+    except Exception:
+        pass
+
+
+async def handle_saved_reconnect_request_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle reconnect request from /saved list"""
+    user_id = query.from_user.id
+    callback_data = query.data
+
+    if matchmaking.get_partner(user_id):
+        await query.answer("❌ End current chat before reconnecting.", show_alert=True)
+        return
+
+    if user_id in matchmaking.waiting_users:
+        await query.answer("❌ Stop search before reconnecting.", show_alert=True)
+        return
+
+    if not callback_data.startswith('reconnect_saved_'):
+        await query.answer("❌ Invalid reconnect request.", show_alert=True)
+        return
+
+    try:
+        partner_id = int(callback_data.split('reconnect_saved_')[1])
+    except ValueError:
+        await query.answer("❌ Invalid reconnect request.", show_alert=True)
+        return
+
+    try:
+        with database.get_db() as db:
+            is_mutual_saved = database.has_saved_chat(db, user_id, partner_id) and database.has_saved_chat(db, partner_id, user_id)
+            partner = database.get_user(db, partner_id)
+            requester = database.get_user(db, user_id)
+    except Exception as e:
+        logger.error(f"Reconnect precheck failed for {user_id}: {e}")
+        await query.answer("❌ Reconnect is temporarily unavailable.", show_alert=True)
+        return
+
+    if not is_mutual_saved:
+        await query.answer("❌ This saved chat is no longer available.", show_alert=True)
+        return
+
+    if not partner:
+        await query.answer("❌ Partner not available.", show_alert=True)
+        return
+
+    if matchmaking.get_partner(partner_id):
+        await query.answer("❌ Partner is in another chat right now.", show_alert=True)
+        return
+
+    if partner_id in matchmaking.waiting_users:
+        await query.answer("❌ Partner is currently searching. Try again shortly.", show_alert=True)
+        return
+
+    reconnect_requests[partner_id] = user_id
+    requester_name = requester.nickname if requester else "Your saved partner"
+    reconnect_buttons = build_reconnect_request_markup()
+
+    try:
+        await context.bot.send_message(
+            partner_id,
+            f"🔄 {requester_name} wants to reconnect from saved chats. Accept?",
+            reply_markup=reconnect_buttons
+        )
+    except Exception as e:
+        reconnect_requests.pop(partner_id, None)
+        logger.error(f"Failed to send reconnect request panel from {user_id} to {partner_id}: {e}")
+        await query.answer("❌ Could not send reconnect request to partner.", show_alert=True)
+        return
+
+    await query.answer("🔄 Reconnect request sent", show_alert=False)
+    requester_panel = build_requester_cancel_reconnect_markup()
+    await context.bot.send_message(
+        user_id,
+        "⏳ Reconnect request sent. Partner received Accept/Delete panel.",
+        reply_markup=requester_panel
+    )
+    await context.bot.send_message(user_id, "⏳ Waiting for partner acceptance...")
+
+
+async def handle_accept_reconnect_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle reconnect acceptance"""
+    user_id = query.from_user.id
+    requester_id = reconnect_requests.pop(user_id, None)
+
+    if not requester_id:
+        await query.answer("❌ No pending reconnect request.", show_alert=True)
+        return
+
+    if matchmaking.get_partner(user_id) or matchmaking.get_partner(requester_id):
+        await query.edit_message_text("❌ Reconnect failed: one user is already in chat.")
+        await context.bot.send_message(requester_id, "❌ Reconnect failed because one user is already in another chat.")
+        return
+
+    if user_id in matchmaking.waiting_users or requester_id in matchmaking.waiting_users:
+        await query.edit_message_text("❌ Reconnect failed: one user is currently searching.")
+        await context.bot.send_message(requester_id, "❌ Reconnect failed because one user is currently searching.")
+        return
+
+    try:
+        async with matchmaking.lock:
+            matchmaking.active_sessions[requester_id] = user_id
+            matchmaking.active_sessions[user_id] = requester_id
+
+            with database.get_db() as db:
+                database.create_chat_session(db, requester_id, user_id)
+    except Exception as e:
+        matchmaking.active_sessions.pop(requester_id, None)
+        matchmaking.active_sessions.pop(user_id, None)
+        logger.error(f"Reconnect accept failed for requester {requester_id} and accepter {user_id}: {e}")
+        await query.edit_message_text("❌ Reconnect failed. Please try again later.")
+        await context.bot.send_message(requester_id, "❌ Reconnect failed due to a temporary issue.")
+        return
+
+    await query.edit_message_text("✅ Reconnected! You can chat now.")
+    await context.bot.send_message(user_id, "✅ Reconnect done. You are now connected.", reply_markup=Keyboards.chat_controls())
+    await context.bot.send_message(requester_id, "✅ Reconnect done! Your partner accepted.", reply_markup=Keyboards.chat_controls())
+
+
+async def handle_decline_reconnect_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle reconnect decline"""
+    user_id = query.from_user.id
+    requester_id = reconnect_requests.pop(user_id, None)
+
+    await query.edit_message_text("❌ Reconnect request declined.")
+    if requester_id:
+        await context.bot.send_message(requester_id, "❌ Reconnect request declined by your saved partner.")
+
+
+async def handle_delete_saved_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Delete a saved chat from /saved list"""
+    user_id = query.from_user.id
+    callback_data = query.data
+
+    if not callback_data.startswith('delete_saved_'):
+        await query.answer("❌ Invalid delete request.", show_alert=True)
+        return
+
+    try:
+        partner_id = int(callback_data.split('delete_saved_')[1])
+    except ValueError:
+        await query.answer("❌ Invalid delete request.", show_alert=True)
+        return
+
+    try:
+        with database.get_db() as db:
+            deleted = database.delete_saved_chat(db, user_id, partner_id, delete_mutual=False)
+    except Exception as e:
+        logger.error(f"Delete saved chat failed for {user_id}: {e}")
+        await query.answer("❌ Could not delete saved chat right now.", show_alert=True)
+        return
+
+    if deleted <= 0:
+        await query.answer("⚠️ Saved chat was not found.", show_alert=True)
+        return
+
+    await query.answer("🗑 Saved chat removed.", show_alert=False)
+    try:
+        text, keyboard = await build_saved_panel(user_id)
+        await query.edit_message_text(text, reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Failed to refresh saved panel after delete for {user_id}: {e}")
+        await query.edit_message_text("✅ Saved chat removed. Use /saved to open panel again.")
+
+
+async def handle_refresh_saved_list_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Refresh saved list panel"""
+    user_id = query.from_user.id
+    try:
+        text, keyboard = await build_saved_panel(user_id)
+    except Exception as e:
+        logger.error(f"Failed to refresh saved list for {user_id}: {e}")
+        await query.answer("❌ Could not refresh saved list.", show_alert=True)
+        return
+
+    await query.answer("🔄 Saved list refreshed", show_alert=False)
+    await query.edit_message_text(text, reply_markup=keyboard)
 
 # Admin Functions
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2111,6 +2601,7 @@ def main() -> None:
     application.add_handler(CommandHandler("stop", stop_command))
     application.add_handler(CommandHandler("report", report_command))
     application.add_handler(CommandHandler("profile", profile_command))
+    application.add_handler(CommandHandler("saved", saved_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("privacy", privacy_command))
     application.add_handler(CommandHandler("viewonce", viewonce_command))
@@ -2130,6 +2621,7 @@ def main() -> None:
             BotCommand("skip", "Skip current chat partner"),
             BotCommand("stop", "End current chat"),
             BotCommand("profile", "View/edit your profile"),
+            BotCommand("saved", "View your saved chats"),
             BotCommand("viewonce", "Send a view-once disappearing photo"),
             BotCommand("help", "Show help menu"),
             BotCommand("privacy", "Privacy information"),

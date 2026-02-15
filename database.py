@@ -121,6 +121,18 @@ class BroadcastMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
+
+class SavedChat(Base):
+    __tablename__ = 'saved_chats'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    partner_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    owner = relationship("User", foreign_keys=[owner_id])
+    partner = relationship("User", foreign_keys=[partner_id])
+
 @contextmanager
 def get_db():
     """Database session context manager"""
@@ -167,6 +179,24 @@ def init_database():
                     pass  # Column might already exist or other issue
             
             logger.info("Database migration completed successfully")
+
+            # Create saved chats table if missing
+            try:
+                conn.execute(text(
+                    """
+                    CREATE TABLE IF NOT EXISTS saved_chats (
+                        id SERIAL PRIMARY KEY,
+                        owner_id BIGINT NOT NULL REFERENCES users(user_id),
+                        partner_id BIGINT NOT NULL REFERENCES users(user_id),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(owner_id, partner_id)
+                    )
+                    """
+                ))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_chats_owner_id ON saved_chats(owner_id)"))
+                conn.commit()
+            except Exception:
+                pass
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
         raise
@@ -408,3 +438,46 @@ def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count:
         broadcast.failed_count = failed_count
         broadcast.completed_at = datetime.utcnow()
         db.flush()
+
+
+def get_saved_chat(db, owner_id: int, partner_id: int) -> Optional[SavedChat]:
+    """Get one saved chat for owner and partner"""
+    return db.query(SavedChat).filter(
+        SavedChat.owner_id == owner_id,
+        SavedChat.partner_id == partner_id
+    ).first()
+
+
+def get_saved_chats_for_owner(db, owner_id: int) -> List[SavedChat]:
+    """Get all saved chats for one owner"""
+    return db.query(SavedChat).filter(
+        SavedChat.owner_id == owner_id
+    ).order_by(SavedChat.created_at.desc()).all()
+
+
+def count_saved_chats_for_owner(db, owner_id: int) -> int:
+    """Count saved chats for one owner"""
+    return db.query(SavedChat).filter(SavedChat.owner_id == owner_id).count()
+
+
+def create_saved_chat(db, owner_id: int, partner_id: int) -> Optional[SavedChat]:
+    """Create a saved chat if it does not exist"""
+    existing = get_saved_chat(db, owner_id, partner_id)
+    if existing:
+        return existing
+
+    saved_chat = SavedChat(owner_id=owner_id, partner_id=partner_id)
+    db.add(saved_chat)
+    db.flush()
+    return saved_chat
+
+
+def delete_saved_chat(db, owner_id: int, partner_id: int) -> bool:
+    """Delete one saved chat"""
+    saved_chat = get_saved_chat(db, owner_id, partner_id)
+    if not saved_chat:
+        return False
+
+    db.delete(saved_chat)
+    db.flush()
+    return True

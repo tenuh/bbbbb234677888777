@@ -931,6 +931,7 @@ async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                     'nickname': nickname,
                     'saved_time': saved_time
                 })
+                saved_rows.append((nickname, saved_time))
     except Exception as e:
         logger.error(f"Failed to load saved chats for {user_id}: {e}")
         await update.message.reply_text("❌ Could not load saved chats right now. Please try again.")
@@ -955,6 +956,10 @@ async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "\n".join(lines),
         reply_markup=InlineKeyboardMarkup(keyboard_rows)
     )
+    for index, (nickname, saved_time) in enumerate(saved_rows, start=1):
+        lines.append(f"{index}. {nickname} — {saved_time}")
+
+    await update.message.reply_text("\n".join(lines))
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show user profile"""
@@ -1693,6 +1698,8 @@ async def handle_accept_save_callback(query, context: ContextTypes.DEFAULT_TYPE)
     await query.edit_message_text("✅ Chat saved for both users!")
     await context.bot.send_message(user_id, "✅ Chat saved for both users.")
     await context.bot.send_message(requester_id, "✅ Your save request was accepted. Chat saved for both users.")
+    await query.edit_message_text("✅ Chat saved!")
+    await context.bot.send_message(requester_id, "✅ Your save request was accepted.")
 
 
 async def handle_decline_save_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:

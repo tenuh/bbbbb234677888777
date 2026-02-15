@@ -213,6 +213,11 @@ def init_database():
                 except Exception:
                     pass
 
+                        user_id BIGINT NOT NULL REFERENCES users(user_id),
+                        partner_id BIGINT NOT NULL REFERENCES users(user_id),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_chats_user_id ON saved_chats(user_id)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_chats_partner_id ON saved_chats(partner_id)"))
                 conn.commit()

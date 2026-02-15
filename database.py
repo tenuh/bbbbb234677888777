@@ -25,7 +25,7 @@ if 'channel_binding=' in DATABASE_URL:
     DATABASE_URL = re.sub(r'[&?]channel_binding=[^&]*', '', DATABASE_URL)
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
-SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=engine))
 Base = declarative_base()
 
 # Many-to-many relationship table for user interests

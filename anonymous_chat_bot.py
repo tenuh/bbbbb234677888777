@@ -4,6 +4,7 @@ import asyncio
 import time
 import random
 import re
+import hashlib
 from datetime import datetime, timedelta
 from typing import Dict, List, Set, Optional, Union
 
@@ -43,6 +44,35 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_ID = 1395596220  # Fixed admin ID
 RETRY_MATCHING_INTERVAL = 10  # seconds between matching retries
 MAX_RETRY_ATTEMPTS = 12  # Maximum retry attempts (2 minutes)
+
+POLLER_LOCK_CONNECTION = None
+
+
+def acquire_polling_lock() -> bool:
+    """Ensure only one Railway replica consumes getUpdates"""
+    global POLLER_LOCK_CONNECTION
+    try:
+        dialect_name = getattr(database.engine, 'dialect', None)
+        dialect_name = dialect_name.name if dialect_name else ''
+        if dialect_name != 'postgresql':
+            return True
+
+        lock_key_source = f"anon-chat-bot:{os.getenv('RAILWAY_PROJECT_ID', 'default')}:{os.getenv('RAILWAY_SERVICE_ID', 'default')}"
+        lock_key = int(hashlib.sha1(lock_key_source.encode('utf-8')).hexdigest()[:15], 16)
+
+        conn = database.engine.connect()
+        got_lock = conn.execute(database.text("SELECT pg_try_advisory_lock(:key)"), {'key': lock_key}).scalar()
+        if got_lock:
+            POLLER_LOCK_CONNECTION = conn
+            logger.info("Acquired polling lock for this replica")
+            return True
+
+        conn.close()
+        logger.warning("Another replica is already polling Telegram updates; this replica will stay idle")
+        return False
+    except Exception as lock_error:
+        logger.warning(f"Polling lock check failed, continuing without lock: {lock_error}")
+        return True
 
 if not TOKEN:
     logger.error("TELEGRAM_BOT_TOKEN environment variable not set")
@@ -699,8 +729,6 @@ class MatchmakingService:
                 return candidate_id
 
         return None
-        """Get current chat partner"""
-        return self.active_sessions.get(user_id)
 
     async def connect_saved_partners(self, user_a_id: int, user_b_id: int) -> bool:
         """Create active session for saved partners safely"""
@@ -789,7 +817,7 @@ def build_saved_chat_menu(user_id: int):
         if not saved_chats:
             return Messages.SAVED_EMPTY, Keyboards.main_menu()
 
-        lines = [Messages.SAVED_MENU_TITLE, ""]
+        lines = ["💾 Your Saved Chats", "", "Maximum saved chats: 3", ""]
         buttons = []
 
         for index, saved_chat in enumerate(saved_chats, start=1):
@@ -799,7 +827,6 @@ def build_saved_chat_menu(user_id: int):
                 saved_date = saved_chat.created_at.strftime('%Y-%m-%d %H:%M')
             else:
                 saved_date = "Unknown"
-            saved_date = saved_chat.created_at.strftime('%Y-%m-%d %H:%M')
             lines.append(f"{index}. **{partner_name}**")
             lines.append(f"   🆔 `{saved_chat.partner_id}`")
             lines.append(f"   📅 Saved at: {saved_date}")
@@ -962,7 +989,7 @@ async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Handle /saved command"""
     user_id = update.effective_user.id
     text, keyboard = build_saved_chat_menu(user_id)
-    await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await update.message.reply_text(text, reply_markup=keyboard)
 
 async def handle_report_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle reporting current partner"""
@@ -1003,7 +1030,7 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
         
         interests = ", ".join([interest.name for interest in user.interests]) if user.interests else "None set"
-        created_date = user.created_at.strftime("%B %d, %Y")
+        created_date = user.created_at.strftime("%B %d, %Y") if user.created_at else "Unknown"
         mood_display = f"{user.mood} {Moods.OPTIONS.get(user.mood, '')}" if user.mood else "Not set"
         
         profile_text = Messages.PROFILE_INFO.format(
@@ -1066,7 +1093,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data == 'view_saved_chats':
         text, keyboard = build_saved_chat_menu(user_id)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        await query.edit_message_text(text, reply_markup=keyboard)
     
     elif data == 'help_menu':
         await query.edit_message_text(
@@ -1142,7 +1169,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data == 'saved_refresh':
         text, keyboard = build_saved_chat_menu(user_id)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        await query.edit_message_text(text, reply_markup=keyboard)
 
     elif data.startswith('saved_reconnect_'):
         await handle_saved_reconnect_callback(query, context)
@@ -1416,7 +1443,7 @@ async def show_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
             return
         
         interests = ", ".join([interest.name for interest in user.interests]) if user.interests else "None set"
-        created_date = user.created_at.strftime("%B %d, %Y")
+        created_date = user.created_at.strftime("%B %d, %Y") if user.created_at else "Unknown"
         mood_display = f"{user.mood} {Moods.OPTIONS.get(user.mood, '')}" if user.mood else "Not set"
         
         profile_text = Messages.PROFILE_INFO.format(
@@ -1662,7 +1689,6 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
         bot = get_bot_from_callback(query, context)
         if bot:
             await bot.send_message(requester_id, Messages.SAVE_DECLINED_SENDER)
-        await query.bot.send_message(requester_id, Messages.SAVE_DECLINED_SENDER)
         return
 
     with database.get_db() as db:
@@ -1675,7 +1701,6 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
             bot = get_bot_from_callback(query, context)
             if bot:
                 await bot.send_message(requester_id, Messages.SAVE_LIMIT_REACHED)
-            await query.bot.send_message(requester_id, Messages.SAVE_LIMIT_REACHED)
             return
 
         if responder_count >= 3:
@@ -1684,7 +1709,6 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
             bot = get_bot_from_callback(query, context)
             if bot:
                 await bot.send_message(requester_id, "❌ Partner cannot save now because their list is full.")
-            await query.bot.send_message(requester_id, "❌ Partner cannot save now because their list is full.")
             return
 
         database.create_saved_chat(db, requester_id, responder_id)
@@ -1695,7 +1719,6 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
     bot = get_bot_from_callback(query, context)
     if bot:
         await bot.send_message(requester_id, Messages.SAVE_ACCEPTED_SENDER)
-    await query.bot.send_message(requester_id, Messages.SAVE_ACCEPTED_SENDER)
 
 
 async def handle_saved_delete_callback(query) -> None:
@@ -1717,7 +1740,7 @@ async def handle_saved_delete_callback(query) -> None:
         await query.answer("⚠️ Saved chat already removed.")
 
     text, keyboard = build_saved_chat_menu(user_id)
-    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    await query.edit_message_text(text, reply_markup=keyboard)
 
 
 async def handle_saved_reconnect_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1768,7 +1791,6 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
         bot = get_bot_from_callback(query, context)
         if bot:
             await bot.send_message(requester_id, Messages.RECONNECT_DECLINED_SENDER)
-        await query.bot.send_message(requester_id, Messages.RECONNECT_DECLINED_SENDER)
         return
 
     if matchmaking.get_partner(responder_id) or responder_id in matchmaking.waiting_users:
@@ -1780,7 +1802,6 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
         bot = get_bot_from_callback(query, context)
         if bot:
             await bot.send_message(requester_id, "⚠️ Reconnect failed because you are busy now.")
-        await query.bot.send_message(requester_id, "⚠️ Reconnect failed because you are busy now.")
         return
 
     with database.get_db() as db:
@@ -1791,7 +1812,6 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
             bot = get_bot_from_callback(query, context)
             if bot:
                 await bot.send_message(requester_id, "⚠️ Reconnect failed because saved chat was removed.")
-            await query.bot.send_message(requester_id, "⚠️ Reconnect failed because saved chat was removed.")
             return
 
     connected = await matchmaking.connect_saved_partners(requester_id, responder_id)
@@ -1806,13 +1826,7 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
     bot = get_bot_from_callback(query, context)
     if bot:
         await bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
-        await bot.send_message(responder_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
-        await query.bot.send_message(requester_id, "⚠️ Reconnect failed because one user is busy now.")
-        return
-
-    await query.edit_message_text(Messages.RECONNECT_ACCEPTED)
-    await query.bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
-    await query.bot.send_message(responder_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
+        responder_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
 
 async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle skip chat button callback"""
@@ -1953,7 +1967,8 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
                 reports_text += f"👤 Reporter: {reporter.nickname if reporter else 'Unknown'} (ID: {report.reporter_id})\n"
                 reports_text += f"🎯 Reported: {reported.nickname if reported else 'Unknown'} (ID: {report.reported_id})\n"
                 reports_text += f"📝 Reason: {report.reason or 'No reason provided'}\n"
-                reports_text += f"📅 Date: {report.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+                report_date = report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else 'Unknown'
+                reports_text += f"📅 Date: {report_date}\n\n"
             
             if len(reports) > 10:
                 reports_text += f"... and {len(reports) - 10} more reports"
@@ -1988,7 +2003,8 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
             for user in banned_users[:15]:  # Show max 15
                 banned_text += f"**{user.nickname}** (ID: {user.user_id})\n"
                 banned_text += f"📝 Reason: {user.ban_reason or 'No reason'}\n"
-                banned_text += f"📅 Banned: {user.ban_date.strftime('%Y-%m-%d')}\n\n"
+                ban_date = user.ban_date.strftime('%Y-%m-%d') if user.ban_date else 'Unknown'
+                banned_text += f"📅 Banned: {ban_date}\n\n"
             
             if len(banned_users) > 15:
                 banned_text += f"... and {len(banned_users) - 15} more"
@@ -2582,6 +2598,11 @@ def main() -> None:
     application.add_error_handler(error_handler)
     
     # Start polling (drop pending updates to avoid conflicts with other instances)
+    if not acquire_polling_lock():
+        logger.info("Replica is idle because another instance owns polling lock")
+        while True:
+            time.sleep(60)
+
     logger.info("Bot started successfully")
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 

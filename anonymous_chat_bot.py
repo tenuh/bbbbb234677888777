@@ -847,7 +847,7 @@ def get_bot_from_callback(query, context: Optional[ContextTypes.DEFAULT_TYPE] = 
     return None
     
 USERNAME_PATTERN = re.compile(r'@\w+')
-PHONE_PATTERN = re.compile(r'(\+?\d[\d\s\-]{7,}\d)')
+PHONE_PATTERN = re.compile(r'(@)')
 async def block_personal_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
@@ -1693,8 +1693,7 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
 
     with database.get_db() as db:
         requester_count = database.count_saved_chats_for_owner(db, requester_id)
-        responder_count = database.count_saved_chats_for_owner(db, responder_id)
-
+        
         if requester_count >= 3:
             pending_save_requests.discard(request_key)
             await query.edit_message_text("⚠️ Requester reached the saved chat limit (3).")
@@ -1712,8 +1711,7 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
             return
 
         database.create_saved_chat(db, requester_id, responder_id)
-        database.create_saved_chat(db, responder_id, requester_id)
-
+        
     pending_save_requests.discard(request_key)
     await query.edit_message_text(Messages.SAVE_ACCEPTED_PARTNER)
     bot = get_bot_from_callback(query, context)
@@ -2559,7 +2557,7 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.Document.MimeType("video/mp4"), handle_video_document))
     application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, block_personal_info),group=0)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),group=1)
     
     # Set bot commands
     async def set_commands():

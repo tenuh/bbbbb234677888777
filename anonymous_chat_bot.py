@@ -1826,15 +1826,14 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
     bot = get_bot_from_callback(query, context)
     if bot:
         await bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
-        (responder_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
-
+        
 async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle skip chat button callback"""
     user_id = query.from_user.id
     partner_id = await matchmaking.end_chat(user_id)
     
     if partner_id:
-        await query.edit_message_text(Messages.SKIPPED_CHAT)
+        
         await context.bot.send_message(partner_id, Messages.PARTNER_SKIPPED, reply_markup=Keyboards.main_menu())
         
         # Start new search for current user - Add them back to queue

@@ -121,6 +121,18 @@ class BroadcastMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
+
+class SavedChat(Base):
+    __tablename__ = 'saved_chats'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    partner_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    owner = relationship("User", foreign_keys=[owner_id])
+    partner = relationship("User", foreign_keys=[partner_id])
+
 @contextmanager
 def get_db():
     """Database session context manager"""
@@ -167,6 +179,114 @@ def init_database():
                     pass  # Column might already exist or other issue
             
             logger.info("Database migration completed successfully")
+
+            # Create or migrate saved chats table
+            try:
+                conn.execute(text(
+                    """
+                    CREATE TABLE IF NOT EXISTS saved_chats (
+                        id SERIAL PRIMARY KEY,
+                        owner_id BIGINT,
+                        partner_id BIGINT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                ))
+                conn.commit()
+
+                saved_chat_columns = {
+                    row[0]
+                    for row in conn.execute(text(
+                        "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'saved_chats'"
+                    ))
+                }
+
+                if 'owner_id' not in saved_chat_columns:
+                    conn.execute(text("ALTER TABLE saved_chats ADD COLUMN owner_id BIGINT"))
+                    conn.commit()
+                    if 'user_id' in saved_chat_columns:
+                        conn.execute(text("UPDATE saved_chats SET owner_id = user_id WHERE owner_id IS NULL"))
+                        conn.commit()
+
+                if 'partner_id' not in saved_chat_columns:
+                    conn.execute(text("ALTER TABLE saved_chats ADD COLUMN partner_id BIGINT"))
+                    conn.commit()
+                    if 'partner_user_id' in saved_chat_columns:
+                        conn.execute(text("UPDATE saved_chats SET partner_id = partner_user_id WHERE partner_id IS NULL"))
+                        conn.commit()
+
+                if 'user_id' in saved_chat_columns and 'owner_id' in saved_chat_columns:
+                    conn.execute(text("UPDATE saved_chats SET user_id = owner_id WHERE user_id IS NULL AND owner_id IS NOT NULL"))
+                    conn.commit()
+
+                if 'partner_user_id' in saved_chat_columns and 'partner_id' in saved_chat_columns:
+                    conn.execute(text("UPDATE saved_chats SET partner_user_id = partner_id WHERE partner_user_id IS NULL AND partner_id IS NOT NULL"))
+                    conn.commit()
+
+                conn.execute(text("ALTER TABLE saved_chats ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
+                conn.execute(text("DELETE FROM saved_chats WHERE owner_id IS NULL OR partner_id IS NULL"))
+                conn.commit()
+
+                try:
+                    conn.execute(text("ALTER TABLE saved_chats ALTER COLUMN owner_id SET NOT NULL"))
+                    conn.execute(text("ALTER TABLE saved_chats ALTER COLUMN partner_id SET NOT NULL"))
+                    conn.commit()
+                except Exception as not_null_error:
+                    logger.warning(f"Saved chats NOT NULL migration warning: {not_null_error}")
+                    conn.rollback()
+
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_chats_owner_id ON saved_chats(owner_id)"))
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_saved_chats_owner_partner ON saved_chats(owner_id, partner_id)"))
+                conn.commit()
+
+                try:
+                    conn.execute(text(
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint
+                                WHERE conname = 'fk_saved_chats_owner_id'
+                            ) THEN
+                                ALTER TABLE saved_chats
+                                ADD CONSTRAINT fk_saved_chats_owner_id
+                                FOREIGN KEY (owner_id) REFERENCES users(user_id) ON DELETE CASCADE;
+                            END IF;
+                        END
+                        $$;
+                        """
+                    ))
+                    conn.commit()
+                except Exception as owner_fk_error:
+                    logger.warning(f"Saved chats owner FK migration warning: {owner_fk_error}")
+                    conn.rollback()
+
+                try:
+                    conn.execute(text(
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint
+                                WHERE conname = 'fk_saved_chats_partner_id'
+                            ) THEN
+                                ALTER TABLE saved_chats
+                                ADD CONSTRAINT fk_saved_chats_partner_id
+                                FOREIGN KEY (partner_id) REFERENCES users(user_id) ON DELETE CASCADE;
+                            END IF;
+                        END
+                        $$;
+                        """
+                    ))
+                    conn.commit()
+                except Exception as partner_fk_error:
+                    logger.warning(f"Saved chats partner FK migration warning: {partner_fk_error}")
+                    conn.rollback()
+            except Exception as migration_error:
+                logger.error(f"Saved chats migration failed: {migration_error}")
+                conn.rollback()
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
         raise
@@ -408,3 +528,140 @@ def update_broadcast_stats(db, broadcast_id: int, sent_count: int, failed_count:
         broadcast.failed_count = failed_count
         broadcast.completed_at = datetime.utcnow()
         db.flush()
+
+
+def _get_saved_chat_columns(db):
+    """Detect saved_chats owner/partner column names for legacy compatibility"""
+    rows = db.execute(text(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'saved_chats'"
+    )).fetchall()
+    columns = {row[0] for row in rows}
+
+    owner_col = 'owner_id' if 'owner_id' in columns else 'user_id' if 'user_id' in columns else None
+    partner_col = 'partner_id' if 'partner_id' in columns else 'partner_user_id' if 'partner_user_id' in columns else None
+    return owner_col, partner_col
+
+
+def _get_saved_chat_column_set(db) -> Set[str]:
+    """Get all columns currently present in saved_chats table"""
+    rows = db.execute(text(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'saved_chats'"
+    )).fetchall()
+    return {row[0] for row in rows}
+
+
+def get_saved_chat(db, owner_id: int, partner_id: int) -> Optional[SavedChat]:
+    """Get one saved chat for owner and partner"""
+    owner_col, partner_col = _get_saved_chat_columns(db)
+    if not owner_col or not partner_col:
+        return None
+
+    query = text(
+        f"SELECT id, {owner_col} AS owner_id, {partner_col} AS partner_id, created_at FROM saved_chats "
+        f"WHERE {owner_col} = :owner_id AND {partner_col} = :partner_id LIMIT 1"
+    )
+    row = db.execute(query, {'owner_id': owner_id, 'partner_id': partner_id}).fetchone()
+    if not row:
+        return None
+
+    record = SavedChat()
+    record.id = row[0]
+    record.owner_id = row[1]
+    record.partner_id = row[2]
+    record.created_at = row[3]
+    return record
+
+
+def get_saved_chats_for_owner(db, owner_id: int) -> List[SavedChat]:
+    """Get all saved chats for one owner"""
+    owner_col, partner_col = _get_saved_chat_columns(db)
+    if not owner_col or not partner_col:
+        return []
+
+    query = text(
+        f"SELECT id, {owner_col} AS owner_id, {partner_col} AS partner_id, created_at FROM saved_chats "
+        f"WHERE {owner_col} = :owner_id ORDER BY created_at DESC"
+    )
+    rows = db.execute(query, {'owner_id': owner_id}).fetchall()
+
+    results = []
+    for row in rows:
+        record = SavedChat()
+        record.id = row[0]
+        record.owner_id = row[1]
+        record.partner_id = row[2]
+        record.created_at = row[3]
+        results.append(record)
+    return results
+
+
+def count_saved_chats_for_owner(db, owner_id: int) -> int:
+    """Count saved chats for one owner"""
+    owner_col, partner_col = _get_saved_chat_columns(db)
+    if not owner_col or not partner_col:
+        return 0
+
+    query = text(f"SELECT COUNT(*) FROM saved_chats WHERE {owner_col} = :owner_id")
+    return db.execute(query, {'owner_id': owner_id}).scalar() or 0
+
+
+def create_saved_chat(db, owner_id: int, partner_id: int) -> Optional[SavedChat]:
+    """Create a saved chat if it does not exist"""
+    existing = get_saved_chat(db, owner_id, partner_id)
+    if existing:
+        return existing
+
+    owner_col, partner_col = _get_saved_chat_columns(db)
+    if not owner_col or not partner_col:
+        return None
+
+    columns = _get_saved_chat_column_set(db)
+    insert_fields = [owner_col, partner_col]
+    params = {
+        'owner_id': owner_id,
+        'partner_id': partner_id,
+    }
+
+    if 'user_id' in columns and 'user_id' not in insert_fields:
+        insert_fields.append('user_id')
+        params['user_id'] = owner_id
+
+    if 'partner_user_id' in columns and 'partner_user_id' not in insert_fields:
+        insert_fields.append('partner_user_id')
+        params['partner_user_id'] = partner_id
+
+    values_clause = []
+    for field in insert_fields:
+        if field == owner_col:
+            values_clause.append(':owner_id')
+        elif field == partner_col:
+            values_clause.append(':partner_id')
+        else:
+            values_clause.append(f':{field}')
+
+    insert_query = text(
+        f"INSERT INTO saved_chats ({', '.join(insert_fields)}) VALUES ({', '.join(values_clause)}) RETURNING id, created_at"
+    )
+    row = db.execute(insert_query, params).fetchone()
+    if not row:
+        return None
+
+    record = SavedChat()
+    record.id = row[0]
+    record.owner_id = owner_id
+    record.partner_id = partner_id
+    record.created_at = row[1]
+    return record
+
+
+def delete_saved_chat(db, owner_id: int, partner_id: int) -> bool:
+    """Delete one saved chat"""
+    owner_col, partner_col = _get_saved_chat_columns(db)
+    if not owner_col or not partner_col:
+        return False
+
+    delete_query = text(
+        f"DELETE FROM saved_chats WHERE {owner_col} = :owner_id AND {partner_col} = :partner_id"
+    )
+    result = db.execute(delete_query, {'owner_id': owner_id, 'partner_id': partner_id})
+    return result.rowcount > 0

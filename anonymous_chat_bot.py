@@ -828,7 +828,6 @@ def build_saved_chat_menu(user_id: int):
             else:
                 saved_date = "Unknown"
             lines.append(f"{index}. **{partner_name}**")
-            lines.append(f"   🆔 `{saved_chat.partner_id}`")
             lines.append(f"   📅 Saved at: {saved_date}")
             lines.append("")
             buttons.append(Keyboards.saved_chat_row(saved_chat.partner_id))

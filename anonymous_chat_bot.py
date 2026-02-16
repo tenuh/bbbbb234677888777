@@ -1826,7 +1826,7 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
     bot = get_bot_from_callback(query, context)
     if bot:
         await bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
-        responder_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
+        (responder_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
 
 async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle skip chat button callback"""

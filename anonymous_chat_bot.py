@@ -2595,9 +2595,13 @@ def main() -> None:
     
     # Start polling (drop pending updates to avoid conflicts with other instances)
     if not acquire_polling_lock():
-        logger.info("Replica is idle because another instance owns polling lock")
+        logger.info("Replica is idle because another instance owns polling lock — will retry every 30s")
         while True:
-            time.sleep(60)
+            time.sleep(30)
+            if acquire_polling_lock():
+                logger.info("Acquired polling lock after waiting — starting bot now")
+                break
+            logger.info("Still waiting for polling lock...")
 
     logger.info("Bot started successfully")
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)

@@ -1937,6 +1937,9 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
             [InlineKeyboardButton("🚫 Ban User", callback_data='admin_ban_user')],
             [InlineKeyboardButton("✅ Unban User", callback_data='admin_unban_user')],
             [InlineKeyboardButton("📋 List Banned", callback_data='admin_list_banned')],
+            [InlineKeyboardButton("🔇 Mute User", callback_data='admin_mute_user')],
+            [InlineKeyboardButton("🔊 Unmute User", callback_data='admin_unmute_user')],
+            [InlineKeyboardButton("📋 List Muted", callback_data='admin_list_muted')],
             [InlineKeyboardButton("🔙 Back", callback_data='admin_panel_back')]
         ])
         await query.edit_message_text(
@@ -1984,6 +1987,36 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
             parse_mode='Markdown'
         )
         context.user_data['admin_state'] = 'awaiting_unban_user'
+
+    elif data == 'admin_mute_user':
+        await query.edit_message_text(
+            "🔇 **Mute User**\n\nSend the user ID to silently mute:",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_mute_user'
+
+    elif data == 'admin_unmute_user':
+        await query.edit_message_text(
+            "🔊 **Unmute User**\n\nSend the user ID to unmute:",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_unmute_user'
+
+    elif data == 'admin_list_muted':
+        with database.get_db() as db:
+            muted_users = database.get_muted_users(db)
+            if not muted_users:
+                await query.edit_message_text(
+                    "📋 **Muted Users**\n\n✅ No muted users.",
+                    parse_mode='Markdown'
+                )
+                return
+            muted_text = "📋 **Muted Users**\n\n"
+            for user in muted_users[:15]:
+                muted_text += f"**{user.nickname}** (ID: `{user.user_id}`)\n"
+            if len(muted_users) > 15:
+                muted_text += f"... and {len(muted_users) - 15} more"
+            await query.edit_message_text(muted_text, parse_mode='Markdown')
     
     elif data == 'admin_list_banned':
         with database.get_db() as db:
@@ -2039,6 +2072,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         elif admin_state == 'awaiting_ban_reason':
             await handle_admin_ban_reason(update, context)
             return
+        elif admin_state == 'awaiting_mute_user':
+            await handle_admin_mute_user(update, context)
+            return
+        elif admin_state == 'awaiting_unmute_user':
+            await handle_admin_unmute_user(update, context)
+            return
     
     # Check for profile editing states
     editing_state = context.user_data.get('editing_state')
@@ -2052,6 +2091,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if partner_id:
         if user_id in matchmaking.waiting_users:
             matchmaking.waiting_users.discard(user_id)
+
+        # Silently drop messages from muted users — they see no indication
+        with database.get_db() as db:
+            sender = database.get_user(db, user_id)
+            if sender and sender.is_muted:
+                return
+
         # Forward message to partner with content warning if needed
         if contains_inappropriate_content(message_text):
             await update.message.reply_text(Messages.WARNING_MESSAGE, parse_mode='Markdown')
@@ -2184,8 +2230,58 @@ async def handle_admin_unban_user(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("❌ Please send a valid user ID number.")
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {str(e)}")
-    
-    context.user_data.pop('admin_state', None)
+
+async def handle_admin_mute_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Silently mute a user — they won't know"""
+    try:
+        user_id_to_mute = int(update.message.text.strip())
+        admin_id = update.effective_user.id
+
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_mute)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                return
+            if user.is_muted:
+                await update.message.reply_text(f"⚠️ {user.nickname} (ID: {user_id_to_mute}) is already muted.")
+                return
+            database.mute_user(db, user_id_to_mute, admin_id)
+            db.commit()
+            await update.message.reply_text(
+                f"🔇 **User Muted**\n\n👤 {user.nickname} (ID: {user_id_to_mute}) has been silently muted.\nThey will not be notified.",
+                parse_mode='Markdown'
+            )
+        context.user_data.pop('admin_state', None)
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+async def handle_admin_unmute_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Unmute a previously muted user"""
+    try:
+        user_id_to_unmute = int(update.message.text.strip())
+        admin_id = update.effective_user.id
+
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_unmute)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                return
+            if not user.is_muted:
+                await update.message.reply_text(f"⚠️ {user.nickname} (ID: {user_id_to_unmute}) is not muted.")
+                return
+            database.unmute_user(db, user_id_to_unmute, admin_id)
+            db.commit()
+            await update.message.reply_text(
+                f"🔊 **User Unmuted**\n\n👤 {user.nickname} (ID: {user_id_to_unmute}) can now send messages again.",
+                parse_mode='Markdown'
+            )
+        context.user_data.pop('admin_state', None)
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
 
 async def handle_profile_editing(update: Update, context: ContextTypes.DEFAULT_TYPE, editing_state: str) -> None:
     """Handle profile editing states"""

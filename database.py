@@ -59,6 +59,8 @@ class User(Base):
     ban_reason = Column(Text, nullable=True)
     ban_date = Column(DateTime, nullable=True)
     banned_by = Column(BigInteger, nullable=True)  # Admin user_id who banned
+    is_muted = Column(Boolean, default=False)
+    muted_by = Column(BigInteger, nullable=True)  # Admin user_id who muted
 
 class Interest(Base):
     __tablename__ = 'interests'
@@ -169,6 +171,7 @@ def init_database():
                 ("ban_reason", "TEXT"),
                 ("ban_date", "TIMESTAMP"),
                 ("banned_by", "BIGINT"),
+                ("muted_by", "BIGINT"),
             ]
             
             for col_name, col_type in missing_columns:
@@ -370,6 +373,40 @@ def get_banned_users(db):
     return db.query(User).filter(
         User.is_banned == True
     ).order_by(User.ban_date.desc()).all()
+
+def mute_user(db, user_id: int, admin_id: int):
+    """Silently mute a user — they can still send messages but nothing is forwarded"""
+    user = get_user(db, user_id)
+    if user:
+        user.is_muted = True
+        user.muted_by = admin_id
+        admin_action = AdminAction(
+            admin_id=admin_id,
+            action_type='mute',
+            target_user_id=user_id
+        )
+        db.add(admin_action)
+        db.flush()
+
+def unmute_user(db, user_id: int, admin_id: int):
+    """Unmute a previously muted user"""
+    user = get_user(db, user_id)
+    if user:
+        user.is_muted = False
+        user.muted_by = None
+        admin_action = AdminAction(
+            admin_id=admin_id,
+            action_type='unmute',
+            target_user_id=user_id
+        )
+        db.add(admin_action)
+        db.flush()
+
+def get_muted_users(db):
+    """Get all muted users"""
+    return db.query(User).filter(
+        User.is_muted == True
+    ).all()
 
 def update_user_profile(db, user_id: int, field: str, value):
     """Update a specific field in user profile"""

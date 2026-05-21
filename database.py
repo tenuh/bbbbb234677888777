@@ -61,6 +61,8 @@ class User(Base):
     banned_by = Column(BigInteger, nullable=True)  # Admin user_id who banned
     is_muted = Column(Boolean, default=False)
     muted_by = Column(BigInteger, nullable=True)  # Admin user_id who muted
+    is_silent_banned = Column(Boolean, default=False)
+    silent_banned_by = Column(BigInteger, nullable=True)
 
 class Interest(Base):
     __tablename__ = 'interests'
@@ -172,6 +174,8 @@ def init_database():
                 ("ban_date", "TIMESTAMP"),
                 ("banned_by", "BIGINT"),
                 ("muted_by", "BIGINT"),
+                ("is_silent_banned", "BOOLEAN DEFAULT FALSE"),
+                ("silent_banned_by", "BIGINT"),
             ]
             
             for col_name, col_type in missing_columns:
@@ -406,6 +410,40 @@ def get_muted_users(db):
     """Get all muted users"""
     return db.query(User).filter(
         User.is_muted == True
+    ).all()
+
+def silent_ban_user(db, user_id: int, admin_id: int):
+    """Silently ban a user — no notifications to them or their partner"""
+    user = get_user(db, user_id)
+    if user:
+        user.is_silent_banned = True
+        user.silent_banned_by = admin_id
+        admin_action = AdminAction(
+            admin_id=admin_id,
+            action_type='silent_ban',
+            target_user_id=user_id
+        )
+        db.add(admin_action)
+        db.flush()
+
+def silent_unban_user(db, user_id: int, admin_id: int):
+    """Remove a silent ban from a user"""
+    user = get_user(db, user_id)
+    if user:
+        user.is_silent_banned = False
+        user.silent_banned_by = None
+        admin_action = AdminAction(
+            admin_id=admin_id,
+            action_type='silent_unban',
+            target_user_id=user_id
+        )
+        db.add(admin_action)
+        db.flush()
+
+def get_silent_banned_users(db):
+    """Get all silently banned users"""
+    return db.query(User).filter(
+        User.is_silent_banned == True
     ).all()
 
 def update_user_profile(db, user_id: int, field: str, value):

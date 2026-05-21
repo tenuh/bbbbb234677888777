@@ -618,7 +618,7 @@ class MatchmakingService:
         async with self.lock:
             with database.get_db() as db:
                 user = database.get_user(db, user_id)
-                if not user or user.is_banned:
+                if not user or user.is_banned or user.is_silent_banned:
                     return False
                 
                 if user_id in self.active_sessions or user_id in self.waiting_users:
@@ -877,6 +877,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = database.get_user(db, user_id)
         
         if user:
+            if user.is_silent_banned:
+                return  # Silent — no response at all
             if user.is_banned:
                 await update.message.reply_text(
                     f"❌ **Account Suspended**\n\nYour account has been suspended.\n**Reason:** {user.ban_reason or 'Policy violation'}\n\nContact support if you believe this is an error.",
@@ -920,6 +922,8 @@ async def handle_find_partner(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("❌ Please register first using /start")
             return
         
+        if user.is_silent_banned:
+            return  # Silent — no response
         if user.is_banned:
             await update.message.reply_text("❌ Your account is suspended.")
             return
@@ -1402,6 +1406,8 @@ async def handle_find_partner_callback(query, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text("❌ Please register first using /start")
             return
         
+        if user.is_silent_banned:
+            return  # Silent — no response
         if user.is_banned:
             await query.edit_message_text("❌ Your account is suspended.")
             return
@@ -1940,6 +1946,9 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
             [InlineKeyboardButton("🔇 Mute User", callback_data='admin_mute_user')],
             [InlineKeyboardButton("🔊 Unmute User", callback_data='admin_unmute_user')],
             [InlineKeyboardButton("📋 List Muted", callback_data='admin_list_muted')],
+            [InlineKeyboardButton("👻 Silent Ban", callback_data='admin_silent_ban')],
+            [InlineKeyboardButton("👻 Silent Unban", callback_data='admin_silent_unban')],
+            [InlineKeyboardButton("📋 List Silent Banned", callback_data='admin_list_silent_banned')],
             [InlineKeyboardButton("🔙 Back", callback_data='admin_panel_back')]
         ])
         await query.edit_message_text(
@@ -2017,6 +2026,36 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
             if len(muted_users) > 15:
                 muted_text += f"... and {len(muted_users) - 15} more"
             await query.edit_message_text(muted_text, parse_mode='Markdown')
+
+    elif data == 'admin_silent_ban':
+        await query.edit_message_text(
+            "👻 **Silent Ban**\n\nSend the user ID to silently ban.\nThey will not be notified — their actions just silently fail.",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_silent_ban'
+
+    elif data == 'admin_silent_unban':
+        await query.edit_message_text(
+            "👻 **Silent Unban**\n\nSend the user ID to lift the silent ban:",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_silent_unban'
+
+    elif data == 'admin_list_silent_banned':
+        with database.get_db() as db:
+            sb_users = database.get_silent_banned_users(db)
+            if not sb_users:
+                await query.edit_message_text(
+                    "📋 **Silent Banned Users**\n\n✅ None.",
+                    parse_mode='Markdown'
+                )
+                return
+            sb_text = "📋 **Silent Banned Users**\n\n"
+            for user in sb_users[:15]:
+                sb_text += f"**{user.nickname}** (ID: `{user.user_id}`)\n"
+            if len(sb_users) > 15:
+                sb_text += f"... and {len(sb_users) - 15} more"
+            await query.edit_message_text(sb_text, parse_mode='Markdown')
     
     elif data == 'admin_list_banned':
         with database.get_db() as db:
@@ -2078,6 +2117,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         elif admin_state == 'awaiting_unmute_user':
             await handle_admin_unmute_user(update, context)
             return
+        elif admin_state == 'awaiting_silent_ban':
+            await handle_admin_silent_ban(update, context)
+            return
+        elif admin_state == 'awaiting_silent_unban':
+            await handle_admin_silent_unban(update, context)
+            return
     
     # Check for profile editing states
     editing_state = context.user_data.get('editing_state')
@@ -2092,10 +2137,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if user_id in matchmaking.waiting_users:
             matchmaking.waiting_users.discard(user_id)
 
-        # Silently drop messages from muted users — they see no indication
+        # Silently drop messages from muted or silent-banned users — no indication given
         with database.get_db() as db:
             sender = database.get_user(db, user_id)
-            if sender and sender.is_muted:
+            if sender and (sender.is_muted or sender.is_silent_banned):
                 return
 
         # Forward message to partner with content warning if needed
@@ -2275,6 +2320,63 @@ async def handle_admin_unmute_user(update: Update, context: ContextTypes.DEFAULT
             db.commit()
             await update.message.reply_text(
                 f"🔊 **User Unmuted**\n\n👤 {user.nickname} (ID: {user_id_to_unmute}) can now send messages again.",
+                parse_mode='Markdown'
+            )
+        context.user_data.pop('admin_state', None)
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+async def handle_admin_silent_ban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Silently ban a user — they get zero notification, everything appears normal to them"""
+    try:
+        user_id_to_ban = int(update.message.text.strip())
+        admin_id = update.effective_user.id
+
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_ban)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                return
+            if user.is_silent_banned:
+                await update.message.reply_text(f"⚠️ {user.nickname} (ID: {user_id_to_ban}) is already silently banned.")
+                return
+            # Disconnect from any active chat silently — partner gets no notification either
+            partner_id = matchmaking.get_partner(user_id_to_ban)
+            if partner_id:
+                matchmaking.end_session(user_id_to_ban, partner_id)
+            matchmaking.waiting_users.discard(user_id_to_ban)
+            database.silent_ban_user(db, user_id_to_ban, admin_id)
+            db.commit()
+            await update.message.reply_text(
+                f"👻 **User Silently Banned**\n\n👤 {user.nickname} (ID: {user_id_to_ban})\n\nThey have no idea. Their partner received no disconnect notice.",
+                parse_mode='Markdown'
+            )
+        context.user_data.pop('admin_state', None)
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+async def handle_admin_silent_unban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lift a silent ban"""
+    try:
+        user_id_to_unban = int(update.message.text.strip())
+        admin_id = update.effective_user.id
+
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_unban)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                return
+            if not user.is_silent_banned:
+                await update.message.reply_text(f"⚠️ {user.nickname} (ID: {user_id_to_unban}) is not silently banned.")
+                return
+            database.silent_unban_user(db, user_id_to_unban, admin_id)
+            db.commit()
+            await update.message.reply_text(
+                f"👻 **Silent Ban Lifted**\n\n👤 {user.nickname} (ID: {user_id_to_unban}) can use the bot normally again.",
                 parse_mode='Markdown'
             )
         context.user_data.pop('admin_state', None)

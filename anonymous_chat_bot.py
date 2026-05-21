@@ -49,7 +49,8 @@ POLLER_LOCK_CONNECTION = None
 
 
 def acquire_polling_lock() -> bool:
-    """Ensure only one Railway replica consumes getUpdates"""
+    """Ensure only one Railway replica consumes getUpdates.
+    Uses a blocking advisory lock — waits until the old replica releases it."""
     global POLLER_LOCK_CONNECTION
     try:
         dialect_name = getattr(database.engine, 'dialect', None)
@@ -61,15 +62,14 @@ def acquire_polling_lock() -> bool:
         lock_key = int(hashlib.sha1(lock_key_source.encode('utf-8')).hexdigest()[:15], 16)
 
         conn = database.engine.connect()
-        got_lock = conn.execute(database.text("SELECT pg_try_advisory_lock(:key)"), {'key': lock_key}).scalar()
-        if got_lock:
-            POLLER_LOCK_CONNECTION = conn
-            logger.info("Acquired polling lock for this replica")
-            return True
-
-        conn.close()
-        logger.warning("Another replica is already polling Telegram updates; this replica will stay idle")
-        return False
+        # pg_advisory_lock BLOCKS until the lock is available (unlike pg_try_advisory_lock)
+        # This means the new replica will wait for the old one to die, then take over
+        logger.info("Waiting for polling lock (will take over from old replica automatically)...")
+        conn.execute(database.text("SELECT pg_advisory_lock(:key)"), {'key': lock_key})
+        conn.execute(database.text("COMMIT"))
+        POLLER_LOCK_CONNECTION = conn
+        logger.info("Acquired polling lock — this replica will handle all updates")
+        return True
     except Exception as lock_error:
         logger.warning(f"Polling lock check failed, continuing without lock: {lock_error}")
         return True
@@ -2593,15 +2593,9 @@ def main() -> None:
     
     application.add_error_handler(error_handler)
     
-    # Start polling (drop pending updates to avoid conflicts with other instances)
-    if not acquire_polling_lock():
-        logger.info("Replica is idle because another instance owns polling lock — will retry every 30s")
-        while True:
-            time.sleep(30)
-            if acquire_polling_lock():
-                logger.info("Acquired polling lock after waiting — starting bot now")
-                break
-            logger.info("Still waiting for polling lock...")
+    # Start polling — acquire_polling_lock() blocks until the lock is available
+    # so this replica will automatically take over once the old one shuts down
+    acquire_polling_lock()
 
     logger.info("Bot started successfully")
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)

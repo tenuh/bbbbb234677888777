@@ -794,6 +794,15 @@ def is_admin(user_id: int) -> bool:
     """Check if user is admin"""
     return user_id == ADMIN_ID
 
+def is_user_silent_banned(user_id: int) -> bool:
+    """Return True if user is silently banned — used to silently block all actions"""
+    try:
+        with database.get_db() as db:
+            user = database.get_user(db, user_id)
+            return user is not None and user.is_silent_banned
+    except Exception:
+        return False
+
 def contains_inappropriate_content(text: str) -> bool:
     """Simple content filter that gives warnings instead of blocking"""
     # Basic inappropriate content detection
@@ -951,6 +960,8 @@ async def handle_find_partner(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def skip_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /skip command"""
+    if is_user_silent_banned(update.effective_user.id):
+        return
     await handle_skip_chat(update, context)
 
 async def handle_skip_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -969,6 +980,8 @@ async def handle_skip_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /stop command"""
+    if is_user_silent_banned(update.effective_user.id):
+        return
     await handle_end_chat(update, context)
 
 async def handle_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -985,11 +998,15 @@ async def handle_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /report command"""
+    if is_user_silent_banned(update.effective_user.id):
+        return
     await handle_report_user(update, context)
 
 
 async def saved_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /saved command"""
+    if is_user_silent_banned(update.effective_user.id):
+        return
     user_id = update.effective_user.id
     text, keyboard = build_saved_chat_menu(user_id)
     await update.message.reply_text(text, reply_markup=keyboard)
@@ -1020,6 +1037,8 @@ async def handle_report_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /profile command"""
+    if is_user_silent_banned(update.effective_user.id):
+        return
     await show_profile(update, context)
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1056,6 +1075,8 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command"""
+    if is_user_silent_banned(update.effective_user.id):
+        return
     await update.message.reply_text(
         Messages.HELP_MENU,
         reply_markup=Keyboards.help_navigation(),
@@ -1064,6 +1085,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /privacy command"""
+    if is_user_silent_banned(update.effective_user.id):
+        return
     # Create privacy keyboard with back button
     privacy_keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
@@ -1078,9 +1101,14 @@ async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle all button callbacks"""
     query = update.callback_query
-    await query.answer()
-    
     user_id = query.from_user.id
+
+    # Universal silent ban guard — silently ignore everything
+    if is_user_silent_banned(user_id):
+        await query.answer()
+        return
+
+    await query.answer()
     data = query.data
     
     # Gender selection
@@ -1698,7 +1726,8 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
 
     with database.get_db() as db:
         requester_count = database.count_saved_chats_for_owner(db, requester_id)
-        
+        responder_count = database.count_saved_chats_for_owner(db, responder_id)
+
         if requester_count >= 3:
             pending_save_requests.discard(request_key)
             await query.edit_message_text("⚠️ Requester reached the saved chat limit (3).")
@@ -2092,10 +2121,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Safety check for message
     if not update.message or not update.message.text:
         return
-    
+
     user_id = update.effective_user.id
+
+    # Universal silent ban guard — block everything, no response
+    if is_user_silent_banned(user_id):
+        return
+
     message_text = update.message.text
-    
+
     # Check for admin states
     admin_state = context.user_data.get('admin_state')
     if admin_state and is_admin(user_id):
@@ -2137,10 +2171,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if user_id in matchmaking.waiting_users:
             matchmaking.waiting_users.discard(user_id)
 
-        # Silently drop messages from muted or silent-banned users — no indication given
+        # Silently drop messages from muted users — no indication given
         with database.get_db() as db:
             sender = database.get_user(db, user_id)
-            if sender and (sender.is_muted or sender.is_silent_banned):
+            if sender and sender.is_muted:
                 return
 
         # Forward message to partner with content warning if needed

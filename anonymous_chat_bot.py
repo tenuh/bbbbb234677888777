@@ -518,9 +518,16 @@ class Keyboards:
     @staticmethod
     def saved_chat_row(partner_id: int):
         return [
-            InlineKeyboardButton("🔁 Reconnect", callback_data=f'saved_reconnect_{partner_id}'),
+            InlineKeyboardButton("👤 View & Reconnect", callback_data=f'saved_view_{partner_id}'),
             InlineKeyboardButton("🗑️ Delete", callback_data=f'saved_delete_{partner_id}')
         ]
+
+    @staticmethod
+    def reconnect_detail_panel(partner_id: int):
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔁 Send Reconnect Request", callback_data=f'saved_reconnect_{partner_id}')],
+            [InlineKeyboardButton("🔙 Back to Saved Chats", callback_data='view_saved_chats')]
+        ])
     
     @staticmethod
     def games_menu():
@@ -1218,6 +1225,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         text, keyboard = build_saved_chat_menu(user_id)
         await query.edit_message_text(text, reply_markup=keyboard)
 
+    elif data.startswith('saved_view_'):
+        await handle_saved_view_callback(query, context)
+
     elif data.startswith('saved_reconnect_'):
         await handle_saved_reconnect_callback(query, context)
 
@@ -1255,7 +1265,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.edit_message_text(f"🤔 **Would You Rather**\n\n{question}", parse_mode='Markdown')
             await context.bot.send_message(partner_id, f"🤔 **Would You Rather**\n\n{question}", parse_mode='Markdown')
         else:
-            await query.answer("❌ You're not in a chat!", show_alert=True)
+            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
     elif data == 'game_tod':
         await query.edit_message_text(
@@ -1271,7 +1281,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.edit_message_text(f"✨ **Truth**\n\n{question}", parse_mode='Markdown')
             await context.bot.send_message(partner_id, f"✨ **Truth Question for Partner**\n\n{question}", parse_mode='Markdown')
         else:
-            await query.answer("❌ You're not in a chat!", show_alert=True)
+            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
     elif data == 'tod_dare':
         dare = random.choice(Games.TRUTH_OR_DARE['dare'])
@@ -1280,7 +1290,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.edit_message_text(f"🔥 **Dare**\n\n{dare}", parse_mode='Markdown')
             await context.bot.send_message(partner_id, f"🔥 **Dare for Partner**\n\n{dare}", parse_mode='Markdown')
         else:
-            await query.answer("❌ You're not in a chat!", show_alert=True)
+            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
     elif data == 'game_ttal':
         instruction = random.choice(Games.TWO_TRUTHS_LIE)
@@ -1289,18 +1299,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.edit_message_text(f"🎭 **Two Truths & A Lie**\n\n{instruction}", parse_mode='Markdown')
             await context.bot.send_message(partner_id, f"🎭 **Two Truths & A Lie**\n\n{instruction}", parse_mode='Markdown')
         else:
-            await query.answer("❌ You're not in a chat!", show_alert=True)
+            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
     # Creative Features - Social
     elif data == 'icebreaker':
         question = random.choice(IceBreakers.QUESTIONS)
         partner_id = matchmaking.get_partner(user_id)
         if partner_id:
-            await query.answer("💡 Icebreaker sent!")
-            await context.bot.send_message(user_id, f"💡 **Icebreaker Question**\n\n{question}", parse_mode='Markdown')
+            await query.edit_message_text(f"💡 **Icebreaker sent!**\n\n{question}", parse_mode='Markdown')
             await context.bot.send_message(partner_id, f"💡 **Icebreaker Question**\n\n{question}", parse_mode='Markdown')
         else:
-            await query.answer("❌ You're not in a chat!", show_alert=True)
+            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
     elif data == 'send_compliment':
         compliment = random.choice(Compliments.LIST)
@@ -1308,31 +1317,29 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if partner_id:
             with database.get_db() as db:
                 user = database.get_user(db, user_id)
-                if user:
-                    await query.answer("💬 Compliment sent!")
-                    await context.bot.send_message(partner_id, f"💬 **{user.nickname} sent you a compliment:**\n\n{compliment}", parse_mode='Markdown')
+            if user:
+                await query.edit_message_text(f"💬 **Compliment sent!**\n\n_{compliment}_", parse_mode='Markdown')
+                await context.bot.send_message(partner_id, f"💬 **{user.nickname} sent you a compliment:**\n\n{compliment}", parse_mode='Markdown')
         else:
-            await query.answer("❌ You're not in a chat!", show_alert=True)
+            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
     elif data == 'fun_fact':
         fact = random.choice(FunFacts.FACTS)
         partner_id = matchmaking.get_partner(user_id)
         if partner_id:
-            await query.answer("🎯 Fun fact sent!")
-            await context.bot.send_message(user_id, f"🎯 **Fun Fact**\n\n{fact}", parse_mode='Markdown')
+            await query.edit_message_text(f"🎯 **Fun Fact sent!**\n\n{fact}", parse_mode='Markdown')
             await context.bot.send_message(partner_id, f"🎯 **Fun Fact**\n\n{fact}", parse_mode='Markdown')
         else:
-            await query.answer("❌ You're not in a chat!", show_alert=True)
+            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
     elif data == 'daily_topic':
         topic = random.choice(DailyTopics.TOPICS)
         partner_id = matchmaking.get_partner(user_id)
         if partner_id:
-            await query.answer("📅 Topic sent!")
-            await context.bot.send_message(user_id, f"📅 **Today's Topic**\n\nLet's talk about: {topic}", parse_mode='Markdown')
+            await query.edit_message_text(f"📅 **Today's Topic**\n\nLet's talk about: {topic}", parse_mode='Markdown')
             await context.bot.send_message(partner_id, f"📅 **Today's Topic**\n\nLet's talk about: {topic}", parse_mode='Markdown')
         else:
-            await query.answer("❌ You're not in a chat!", show_alert=True)
+            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
     elif data == 'send_gift':
         await query.edit_message_text(
@@ -1349,7 +1356,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             with database.get_db() as db:
                 user = database.get_user(db, user_id)
                 if user:
-                    await query.answer("🎁 Gift sent!")
                     await context.bot.send_message(
                         partner_id, 
                         f"🎁 **{user.nickname} sent you a {gift_name}!** {emoji}",
@@ -1360,7 +1366,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         parse_mode='Markdown'
                     )
         else:
-            await query.answer("❌ You're not in a chat!", show_alert=True)
+            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
     # Mood System
     elif data == 'set_mood':
@@ -1378,7 +1384,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if user:
                 user.mood = emoji
                 db.commit()
-                await query.answer(f"Mood set to {mood_name} {emoji}!")
                 await query.edit_message_text(
                     f"✅ **Mood Updated!**\n\nYour mood is now: {mood_name} {emoji}",
                     reply_markup=Keyboards.profile_menu(),
@@ -1398,7 +1403,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         with database.get_db() as db:
             database.update_user_profile(db, user_id, 'language', lang_code)
             db.commit()
-            await query.answer(get_text('LANG_CHANGED', lang_code))
             await query.edit_message_text(
                 get_text('LANG_CHANGED', lang_code),
                 reply_markup=Keyboards.profile_menu(),
@@ -1620,13 +1624,13 @@ async def handle_view_partner_profile_callback(query, context: ContextTypes.DEFA
     partner_id = matchmaking.get_partner(user_id)
     
     if not partner_id:
-        await query.answer("❌ You're not in a chat right now.")
+        await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
         return
     
     with database.get_db() as db:
         partner = database.get_user(db, partner_id)
         if not partner:
-            await query.answer("❌ Partner not found.")
+            await query.edit_message_text("❌ Partner not found.", reply_markup=Keyboards.main_menu())
             return
         
         interests = ", ".join([interest.name for interest in partner.interests]) if partner.interests else "None set"
@@ -1657,7 +1661,7 @@ async def handle_send_photo_callback(query, context: ContextTypes.DEFAULT_TYPE) 
     partner_id = matchmaking.get_partner(user_id)
     
     if not partner_id:
-        await query.answer("❌ You're not in a chat right now.")
+        await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
         return
     
     await query.edit_message_text(
@@ -1673,7 +1677,7 @@ async def handle_send_view_once_callback(query, context: ContextTypes.DEFAULT_TY
     partner_id = matchmaking.get_partner(user_id)
     
     if not partner_id:
-        await query.answer("❌ You're not in a chat right now.")
+        await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
         return
     
     await query.edit_message_text(
@@ -1690,20 +1694,28 @@ async def handle_save_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -
     partner_id = matchmaking.get_partner(user_id)
 
     if not partner_id:
-        await query.answer("❌ You are not in an active chat.", show_alert=True)
+        await query.edit_message_text(
+            "❌ You are not in an active chat.",
+            reply_markup=Keyboards.main_menu()
+        )
         return
 
     with database.get_db() as db:
         current_count = database.count_saved_chats_for_owner(db, user_id)
         if current_count >= 3:
-            await query.answer(Messages.SAVE_LIMIT_REACHED, show_alert=True)
+            await query.edit_message_text(
+                Messages.SAVE_LIMIT_REACHED,
+                reply_markup=Keyboards.chat_controls()
+            )
             return
 
         if database.get_saved_chat(db, user_id, partner_id):
-            await query.answer(Messages.SAVE_ALREADY_EXISTS, show_alert=True)
+            await query.edit_message_text(
+                Messages.SAVE_ALREADY_EXISTS,
+                reply_markup=Keyboards.chat_controls()
+            )
             return
 
-    await query.answer("💾 Save request sent.")
     bot_data = context.bot_data if context else query.bot_data
     pending_save_requests = bot_data.setdefault('pending_save_requests', set())
     pending_save_requests.add((partner_id, user_id))
@@ -1726,7 +1738,7 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
     try:
         requester_id = int(query.data.rsplit('_', 1)[1])
     except (ValueError, IndexError):
-        await query.answer("❌ Invalid save request.", show_alert=True)
+        await query.edit_message_text("❌ Invalid save request.")
         return
 
     bot_data = context.bot_data if context else query.bot_data
@@ -1734,12 +1746,12 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
     request_key = (responder_id, requester_id)
 
     if request_key not in pending_save_requests:
-        await query.answer("⚠️ This save request has expired.", show_alert=True)
+        await query.edit_message_text("⚠️ This save request has expired.")
         return
 
     if matchmaking.get_partner(responder_id) != requester_id:
         pending_save_requests.discard(request_key)
-        await query.answer("⚠️ This save request is no longer valid.", show_alert=True)
+        await query.edit_message_text("⚠️ This save request is no longer valid.")
         return
 
     if not accepted:
@@ -1788,60 +1800,118 @@ async def handle_saved_delete_callback(query) -> None:
     try:
         partner_id = int(query.data.replace('saved_delete_', ''))
     except ValueError:
-        await query.answer("❌ Invalid saved chat.", show_alert=True)
+        await query.edit_message_text("❌ Invalid saved chat.")
         return
 
     with database.get_db() as db:
-        deleted = database.delete_saved_chat(db, user_id, partner_id)
-
-    if deleted:
-        await query.answer("🗑️ Saved chat deleted.")
-    else:
-        await query.answer("⚠️ Saved chat already removed.")
+        database.delete_saved_chat(db, user_id, partner_id)
 
     text, keyboard = build_saved_chat_menu(user_id)
-    await query.edit_message_text(text, reply_markup=keyboard)
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 
-async def handle_saved_reconnect_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Request reconnect with a saved partner"""
+async def handle_saved_view_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show per-partner detail page with reconnect option"""
     user_id = query.from_user.id
 
     try:
-        partner_id = int(query.data.replace('saved_reconnect_', ''))
+        partner_id = int(query.data.replace('saved_view_', ''))
     except ValueError:
-        await query.answer("❌ Invalid saved chat.", show_alert=True)
-        return
-
-    if matchmaking.get_partner(user_id) or user_id in matchmaking.waiting_users:
-        await query.answer("⚠️ Finish your current chat/search before reconnecting.", show_alert=True)
+        await query.edit_message_text("❌ Invalid saved chat.")
         return
 
     with database.get_db() as db:
         saved_chat = database.get_saved_chat(db, user_id, partner_id)
         if not saved_chat:
-            await query.answer("⚠️ Saved chat not found.", show_alert=True)
+            text, keyboard = build_saved_chat_menu(user_id)
+            await query.edit_message_text("⚠️ This saved chat no longer exists.\n\n" + text, reply_markup=keyboard, parse_mode='Markdown')
             return
+        partner = database.get_user(db, partner_id)
 
-    if matchmaking.get_partner(partner_id) or partner_id in matchmaking.waiting_users:
-        await query.answer("⚠️ Partner is busy right now. Try again later.", show_alert=True)
+    partner_name = partner.nickname if partner else f"User {partner_id}"
+    gender_icon = "👨" if partner and partner.gender == "male" else "👩"
+    saved_date = saved_chat.created_at.strftime('%Y-%m-%d') if saved_chat.created_at else "Unknown"
+
+    in_chat = matchmaking.get_partner(partner_id)
+    in_queue = partner_id in matchmaking.waiting_users
+    if in_chat:
+        status = "🔴 Busy in chat"
+        status_note = "This partner is currently in a chat. Try again later."
+    elif in_queue:
+        status = "🟡 Searching for partner"
+        status_note = "This partner is currently searching. They may not accept right now."
+    else:
+        status = "🟢 Available"
+        status_note = "This partner is free — they can accept your reconnect request now."
+
+    bio = (partner.bio or "Not set") if partner else "Unknown"
+    age = (str(partner.age) if partner.age else "Not set") if partner else "Unknown"
+
+    detail_text = (
+        f"💾 **Saved Partner**\n\n"
+        f"{gender_icon} **{partner_name}**\n"
+        f"📊 Status: {status}\n"
+        f"💬 {status_note}\n\n"
+        f"📝 Bio: {bio}\n"
+        f"🎂 Age: {age}\n"
+        f"📅 Saved on: {saved_date}"
+    )
+
+    await query.edit_message_text(
+        detail_text,
+        reply_markup=Keyboards.reconnect_detail_panel(partner_id),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_saved_reconnect_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send reconnect request to a saved partner"""
+    user_id = query.from_user.id
+
+    try:
+        partner_id = int(query.data.replace('saved_reconnect_', ''))
+    except ValueError:
+        await query.edit_message_text("❌ Invalid saved chat.", reply_markup=Keyboards.reconnect_detail_panel(0))
         return
 
-    # Get names for better UX
+    if matchmaking.get_partner(user_id) or user_id in matchmaking.waiting_users:
+        await query.edit_message_text(
+            "⚠️ **You're currently busy.**\n\nFinish your current chat or stop searching before reconnecting.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=f'saved_view_{partner_id}')]]),
+            parse_mode='Markdown'
+        )
+        return
+
     with database.get_db() as db:
+        saved_chat = database.get_saved_chat(db, user_id, partner_id)
+        if not saved_chat:
+            await query.edit_message_text(
+                "⚠️ This saved chat no longer exists.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Saved Chats", callback_data='view_saved_chats')]]),
+            )
+            return
         requester_user = database.get_user(db, user_id)
         partner_user = database.get_user(db, partner_id)
+
     requester_name = requester_user.nickname if requester_user else "Someone"
     partner_name = partner_user.nickname if partner_user else "Your saved partner"
 
-    await query.answer("🔁 Reconnect request sent.")
+    if matchmaking.get_partner(partner_id) or partner_id in matchmaking.waiting_users:
+        await query.edit_message_text(
+            f"🔴 **{partner_name} is busy right now.**\n\nTry again when they are available.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Check Again", callback_data=f'saved_view_{partner_id}')],
+                [InlineKeyboardButton("🔙 Saved Chats", callback_data='view_saved_chats')]
+            ]),
+            parse_mode='Markdown'
+        )
+        return
 
     cancel_keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("❌ Cancel Request", callback_data=f'reconnect_cancel_{partner_id}')]
     ])
-    await context.bot.send_message(
-        user_id,
-        f"🔁 Reconnect request sent to **{partner_name}**.\nWaiting for their response...",
+    await query.edit_message_text(
+        f"🔁 Request sent to **{partner_name}**.\nWaiting for their response...",
         reply_markup=cancel_keyboard,
         parse_mode='Markdown'
     )
@@ -1860,7 +1930,7 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
     try:
         requester_id = int(query.data.rsplit('_', 1)[1])
     except (ValueError, IndexError):
-        await query.answer("❌ Invalid reconnect request.", show_alert=True)
+        await query.edit_message_text("❌ Invalid reconnect request.")
         return
 
     if not accepted:
@@ -1871,7 +1941,7 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
         return
 
     if matchmaking.get_partner(responder_id) or responder_id in matchmaking.waiting_users:
-        await query.answer("⚠️ You are currently busy.", show_alert=True)
+        await query.edit_message_text("⚠️ You are currently busy. Finish your current session before accepting a reconnect.")
         return
 
     if matchmaking.get_partner(requester_id) or requester_id in matchmaking.waiting_users:

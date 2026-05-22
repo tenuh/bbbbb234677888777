@@ -1223,7 +1223,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data == 'saved_refresh':
         text, keyboard = build_saved_chat_menu(user_id)
-        await query.edit_message_text(text, reply_markup=keyboard)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
     elif data.startswith('saved_view_'):
         await handle_saved_view_callback(query, context)
@@ -1827,10 +1827,12 @@ async def handle_saved_view_callback(query, context: ContextTypes.DEFAULT_TYPE) 
             await query.edit_message_text("⚠️ This saved chat no longer exists.\n\n" + text, reply_markup=keyboard, parse_mode='Markdown')
             return
         partner = database.get_user(db, partner_id)
-
-    partner_name = partner.nickname if partner else f"User {partner_id}"
-    gender_icon = "👨" if partner and partner.gender == "male" else "👩"
-    saved_date = saved_chat.created_at.strftime('%Y-%m-%d') if saved_chat.created_at else "Unknown"
+        # Extract all values inside the session to avoid DetachedInstanceError
+        partner_name = partner.nickname if partner else f"User {partner_id}"
+        gender_icon = "👨" if partner and partner.gender == "male" else "👩"
+        bio = (partner.bio or "Not set") if partner else "Unknown"
+        age = (str(partner.age) if partner.age else "Not set") if partner else "Unknown"
+        saved_date = saved_chat.created_at.strftime('%Y-%m-%d') if saved_chat.created_at else "Unknown"
 
     in_chat = matchmaking.get_partner(partner_id)
     in_queue = partner_id in matchmaking.waiting_users
@@ -1843,9 +1845,6 @@ async def handle_saved_view_callback(query, context: ContextTypes.DEFAULT_TYPE) 
     else:
         status = "🟢 Available"
         status_note = "This partner is free — they can accept your reconnect request now."
-
-    bio = (partner.bio or "Not set") if partner else "Unknown"
-    age = (str(partner.age) if partner.age else "Not set") if partner else "Unknown"
 
     detail_text = (
         f"💾 **Saved Partner**\n\n"
@@ -1892,9 +1891,9 @@ async def handle_saved_reconnect_callback(query, context: ContextTypes.DEFAULT_T
             return
         requester_user = database.get_user(db, user_id)
         partner_user = database.get_user(db, partner_id)
-
-    requester_name = requester_user.nickname if requester_user else "Someone"
-    partner_name = partner_user.nickname if partner_user else "Your saved partner"
+        # Extract all values inside the session to avoid DetachedInstanceError
+        requester_name = requester_user.nickname if requester_user else "Someone"
+        partner_name = partner_user.nickname if partner_user else "Your saved partner"
 
     if matchmaking.get_partner(partner_id) or partner_id in matchmaking.waiting_users:
         await query.edit_message_text(
@@ -2936,7 +2935,9 @@ def main() -> None:
     # Add error handler
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Log errors caused by updates."""
+        import traceback
         logger.error(f"Exception while handling an update: {context.error}")
+        logger.error("".join(traceback.format_exception(type(context.error), context.error, context.error.__traceback__)))
     
     application.add_error_handler(error_handler)
     

@@ -819,29 +819,45 @@ def contains_inappropriate_content(text: str) -> bool:
 
 
 def build_saved_chat_menu(user_id: int):
-    """Build saved chat text and panel"""
+    """Build saved chat text and panel with partner availability"""
     with database.get_db() as db:
         saved_chats = database.get_saved_chats_for_owner(db, user_id)
 
         if not saved_chats:
             return Messages.SAVED_EMPTY, Keyboards.main_menu()
 
-        lines = ["💾 Your Saved Chats", "", "Maximum saved chats: 3", ""]
+        lines = ["💾 **Your Saved Chats**", "", "🔢 Max 3 saved chats | Tap Reconnect to start chatting", ""]
         buttons = []
 
         for index, saved_chat in enumerate(saved_chats, start=1):
             partner = database.get_user(db, saved_chat.partner_id)
             partner_name = partner.nickname if partner else f"User {saved_chat.partner_id}"
+
+            # Partner availability status
+            in_chat = matchmaking.get_partner(saved_chat.partner_id)
+            in_queue = saved_chat.partner_id in matchmaking.waiting_users
+            if in_chat:
+                status = "🔴 Busy in chat"
+            elif in_queue:
+                status = "🟡 Searching for partner"
+            else:
+                status = "🟢 Available"
+
             if saved_chat.created_at:
-                saved_date = saved_chat.created_at.strftime('%Y-%m-%d %H:%M')
+                saved_date = saved_chat.created_at.strftime('%Y-%m-%d')
             else:
                 saved_date = "Unknown"
-            lines.append(f"{index}. **{partner_name}**")
-            lines.append(f"   📅 Saved at: {saved_date}")
+
+            gender_icon = ""
+            if partner:
+                gender_icon = "👨" if partner.gender == "male" else "👩"
+
+            lines.append(f"{index}. {gender_icon} **{partner_name}**")
+            lines.append(f"   {status} | 📅 {saved_date}")
             lines.append("")
             buttons.append(Keyboards.saved_chat_row(saved_chat.partner_id))
 
-        buttons.append([InlineKeyboardButton("🔄 Refresh", callback_data='saved_refresh')])
+        buttons.append([InlineKeyboardButton("🔄 Refresh Status", callback_data='saved_refresh')])
         buttons.append([InlineKeyboardButton("🏠 Main Menu", callback_data='main_menu')])
         return "\n".join(lines).strip(), InlineKeyboardMarkup(buttons)
 
@@ -1213,6 +1229,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data.startswith('reconnect_decline_'):
         await handle_reconnect_response_callback(query, context, accepted=False)
+
+    elif data.startswith('reconnect_cancel_'):
+        try:
+            partner_id = int(data.replace('reconnect_cancel_', ''))
+            with database.get_db() as db:
+                partner = database.get_user(db, partner_id)
+                partner_name = partner.nickname if partner else "your partner"
+            await query.edit_message_text(f"❌ Reconnect request to **{partner_name}** cancelled.", parse_mode='Markdown')
+        except Exception:
+            await query.edit_message_text("❌ Reconnect request cancelled.")
     
     # Creative Features - Games
     elif data == 'games_menu':
@@ -1744,8 +1770,10 @@ async def handle_save_chat_response_callback(query, context: Optional[ContextTyp
                 await bot.send_message(requester_id, "❌ Partner cannot save now because their list is full.")
             return
 
+        # Create entries for BOTH sides so either can initiate reconnect
         database.create_saved_chat(db, requester_id, responder_id)
-        
+        database.create_saved_chat(db, responder_id, requester_id)
+
     pending_save_requests.discard(request_key)
     await query.edit_message_text(Messages.SAVE_ACCEPTED_PARTNER)
     bot = get_bot_from_callback(query, context)
@@ -1799,12 +1827,29 @@ async def handle_saved_reconnect_callback(query, context: ContextTypes.DEFAULT_T
         await query.answer("⚠️ Partner is busy right now. Try again later.", show_alert=True)
         return
 
+    # Get names for better UX
+    with database.get_db() as db:
+        requester_user = database.get_user(db, user_id)
+        partner_user = database.get_user(db, partner_id)
+    requester_name = requester_user.nickname if requester_user else "Someone"
+    partner_name = partner_user.nickname if partner_user else "Your saved partner"
+
     await query.answer("🔁 Reconnect request sent.")
-    await context.bot.send_message(user_id, Messages.RECONNECT_REQUEST_SENT)
+
+    cancel_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel Request", callback_data=f'reconnect_cancel_{partner_id}')]
+    ])
+    await context.bot.send_message(
+        user_id,
+        f"🔁 Reconnect request sent to **{partner_name}**.\nWaiting for their response...",
+        reply_markup=cancel_keyboard,
+        parse_mode='Markdown'
+    )
     await context.bot.send_message(
         partner_id,
-        Messages.RECONNECT_REQUEST_RECEIVED,
-        reply_markup=Keyboards.reconnect_request_panel(user_id)
+        f"🔁 **{requester_name}** (your saved chat partner) wants to reconnect!\n\nDo you want to start chatting again?",
+        reply_markup=Keyboards.reconnect_request_panel(user_id),
+        parse_mode='Markdown'
     )
 
 
@@ -1838,26 +1883,26 @@ async def handle_reconnect_response_callback(query, context: ContextTypes.DEFAUL
 
     with database.get_db() as db:
         requester_saved = database.get_saved_chat(db, requester_id, responder_id)
-        responder_saved = database.get_saved_chat(db, responder_id, requester_id)
-        if not requester_saved or not responder_saved:
+        if not requester_saved:
             await query.edit_message_text("⚠️ Saved chat link no longer exists.")
             bot = get_bot_from_callback(query, context)
             if bot:
-                await bot.send_message(requester_id, "⚠️ Reconnect failed because saved chat was removed.")
+                await bot.send_message(requester_id, "⚠️ Reconnect failed — saved chat was removed.")
             return
 
     connected = await matchmaking.connect_saved_partners(requester_id, responder_id)
     if not connected:
-        await query.edit_message_text("⚠️ Reconnect failed because one user is busy now.")
+        await query.edit_message_text("⚠️ Reconnect failed — one of you became busy. Try again.")
         bot = get_bot_from_callback(query, context)
         if bot:
-            await bot.send_message(requester_id, "⚠️ Reconnect failed because one user is busy now.")
+            await bot.send_message(requester_id, "⚠️ Reconnect failed — one of you became busy. Try again.")
         return
 
-    await query.edit_message_text(Messages.RECONNECT_ACCEPTED)
+    success_msg = "✅ **Reconnected!** You are now chatting with your saved partner.\n\nSay hello! 👋"
+    await query.edit_message_text(success_msg, reply_markup=Keyboards.chat_controls(), parse_mode='Markdown')
     bot = get_bot_from_callback(query, context)
     if bot:
-        await bot.send_message(requester_id, Messages.RECONNECT_ACCEPTED, reply_markup=Keyboards.chat_controls())
+        await bot.send_message(requester_id, success_msg, reply_markup=Keyboards.chat_controls(), parse_mode='Markdown')
         
 async def handle_skip_chat_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle skip chat button callback"""

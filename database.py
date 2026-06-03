@@ -147,15 +147,6 @@ class SavedChat(Base):
     partner = relationship("User", foreign_keys=[partner_id])
 
 
-class GiftPackPurchase(Base):
-    __tablename__ = 'gift_pack_purchases'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
-    pack_id = Column(String(50), nullable=False)
-    purchased_at = Column(DateTime, default=datetime.utcnow)
-
-    user = relationship("User", foreign_keys=[user_id])
 
 @contextmanager
 def get_db():
@@ -850,27 +841,3 @@ def get_locked_users(db):
     return db.query(User).filter(User.is_locked == True).order_by(User.lock_date.desc()).all()
 
 
-# ─── Gift Packs ───────────────────────────────────────────────────────────────
-
-def has_purchased_pack(db, user_id: int, pack_id: str) -> bool:
-    return db.query(GiftPackPurchase).filter(
-        GiftPackPurchase.user_id == user_id,
-        GiftPackPurchase.pack_id == pack_id
-    ).first() is not None
-
-def get_user_purchased_packs(db, user_id: int) -> List[str]:
-    purchases = db.query(GiftPackPurchase).filter(
-        GiftPackPurchase.user_id == user_id
-    ).all()
-    return [p.pack_id for p in purchases]
-
-def purchase_gift_pack(db, user_id: int, pack_id: str, cost: float) -> bool:
-    user = get_user(db, user_id)
-    if not user or (user.points or 0.0) < cost:
-        return False
-    if has_purchased_pack(db, user_id, pack_id):
-        return False
-    user.points = (user.points or 0.0) - cost
-    db.add(GiftPackPurchase(user_id=user_id, pack_id=pack_id))
-    db.flush()
-    return True

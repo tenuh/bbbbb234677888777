@@ -49,32 +49,6 @@ UNLOCK_POINTS_REQUIRED = 5.0   # unlock points needed to auto-unlock a locked ac
 REFERRAL_POINTS = 1.0          # points awarded per successful referral
 UNLOCK_REFERRAL_POINTS = 0.5   # points awarded per referral while locked
 
-GIFT_PACKS = {
-    'starter': {
-        'name': '🌟 Starter Pack',
-        'cost': 5.0,
-        'gifts': ['🌹', '⭐', '☕'],
-        'description': 'Basic gift set — 3 gifts',
-    },
-    'fun': {
-        'name': '🎉 Fun Pack',
-        'cost': 8.0,
-        'gifts': ['🎁', '🍕', '🎵', '🔥', '🏆'],
-        'description': 'All the fun — 5 gifts',
-    },
-    'romantic': {
-        'name': '❤️ Romantic Pack',
-        'cost': 10.0,
-        'gifts': ['🌹', '❤️', '💎', '🌟'],
-        'description': 'For special moments — 4 gifts',
-    },
-    'premium': {
-        'name': '💎 Premium Pack',
-        'cost': 20.0,
-        'gifts': ['🌹','🎁','⭐','❤️','🍕','🍰','☕','🎵','🌈','🔥','💎','🏆','🎨','📚','🌟'],
-        'description': 'Every gift available — 15 gifts',
-    },
-}
 
 POLLER_LOCK_CONNECTION = None
 
@@ -308,9 +282,7 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
 
 🎮 **Fun Features During Chat:**
 • 🎮 Play Games - Would You Rather, Truth or Dare, Two Truths & A Lie
-• 🎁 Send Gifts - Send virtual gifts to your partner
 • 💡 Icebreakers - Get conversation starter questions
-• 💬 Compliments - Send random compliments
 • 🎯 Fun Facts - Share interesting facts
 • 📅 Daily Topics - Get conversation topics
 
@@ -424,38 +396,6 @@ class Games:
         "Tell your partner 3 facts about you (2 true, 1 false) and see if they can spot the lie!",
     ]
 
-class VirtualGifts:
-    GIFTS = {
-        '🌹': 'Rose',
-        '🎁': 'Gift',
-        '⭐': 'Star',
-        '❤️': 'Heart',
-        '🍕': 'Pizza',
-        '🍰': 'Cake',
-        '☕': 'Coffee',
-        '🎵': 'Music',
-        '🌈': 'Rainbow',
-        '🔥': 'Fire',
-        '💎': 'Diamond',
-        '🏆': 'Trophy',
-        '🎨': 'Art',
-        '📚': 'Book',
-        '🌟': 'Sparkle',
-    }
-
-class Compliments:
-    LIST = [
-        "You seem like a really interesting person! 🌟",
-        "Your conversation skills are amazing! 💬",
-        "You have a great sense of humor! 😄",
-        "You're really easy to talk to! ✨",
-        "I appreciate your perspective on things! 🎯",
-        "You bring good vibes to this chat! ☀️",
-        "You're a great conversationalist! 💫",
-        "Your positivity is contagious! 🌈",
-        "You have interesting thoughts! 💭",
-        "Chatting with you is fun! 🎉",
-    ]
 
 class FunFacts:
     FACTS = [
@@ -516,8 +456,7 @@ class Keyboards:
     def main_menu():
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("💬 Find Partner", callback_data='find_partner')],
-            [InlineKeyboardButton("💾 Saved Chats", callback_data='view_saved_chats'),
-             InlineKeyboardButton("🛍️ Gift Shop", callback_data='shop_menu')],
+            [InlineKeyboardButton("💾 Saved Chats", callback_data='view_saved_chats')],
             [InlineKeyboardButton("👤 My Profile", callback_data='view_profile'), 
              InlineKeyboardButton("❓ Help", callback_data='help_menu')],
             [InlineKeyboardButton("🔗 Referral & Points", callback_data='referral_menu'),
@@ -527,8 +466,6 @@ class Keyboards:
     @staticmethod
     def chat_controls():
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
-             InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
             [InlineKeyboardButton("💾 Save Chat", callback_data='save_chat')],
             [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
             [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
@@ -582,17 +519,6 @@ class Keyboards:
         ])
     
     @staticmethod
-    def virtual_gifts():
-        buttons = []
-        gifts = list(VirtualGifts.GIFTS.items())
-        for i in range(0, len(gifts), 3):
-            row = [InlineKeyboardButton(f"{emoji} {name}", callback_data=f'gift_{emoji}') 
-                   for emoji, name in gifts[i:i+3]]
-            buttons.append(row)
-        buttons.append([InlineKeyboardButton("🔙 Back to Chat", callback_data='back_to_chat')])
-        return InlineKeyboardMarkup(buttons)
-    
-    @staticmethod
     def mood_selector():
         buttons = []
         moods = list(Moods.OPTIONS.items())
@@ -610,48 +536,11 @@ class Keyboards:
             [InlineKeyboardButton("💭 Set Interests", callback_data='set_interests')],
             [InlineKeyboardButton("😊 Set Mood", callback_data='set_mood')],
             [InlineKeyboardButton("💾 Saved Chats", callback_data='view_saved_chats')],
-            [InlineKeyboardButton("🔗 My Referral Link", callback_data='referral_menu'),
-             InlineKeyboardButton("🛍️ Gift Shop", callback_data='shop_menu')],
+            [InlineKeyboardButton("🔗 My Referral Link", callback_data='referral_menu')],
             [InlineKeyboardButton("🌐 Language", callback_data='change_language')],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
         ])
 
-    @staticmethod
-    def shop_menu(packs: dict, owned_packs: list, user_points: float):
-        buttons = []
-        for pack_id, pack in packs.items():
-            owned = pack_id in owned_packs
-            label = f"{'✅' if owned else '🛒'} {pack['name']} — {pack['cost']:.0f} pts"
-            buttons.append([InlineKeyboardButton(label, callback_data=f'shop_view_{pack_id}')])
-        buttons.append([InlineKeyboardButton(f"🌟 Your Points: {user_points:.1f}", callback_data='noop')])
-        buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')])
-        return InlineKeyboardMarkup(buttons)
-
-    @staticmethod
-    def pack_detail(pack_id: str, pack: dict, owned: bool, user_points: float):
-        buttons = []
-        if owned:
-            buttons.append([InlineKeyboardButton("✅ Already Owned", callback_data='noop')])
-        elif user_points >= pack['cost']:
-            buttons.append([InlineKeyboardButton(f"💳 Buy for {pack['cost']:.0f} pts", callback_data=f'buy_pack_{pack_id}')])
-        else:
-            buttons.append([InlineKeyboardButton(f"❌ Need {pack['cost']:.0f} pts (you have {user_points:.1f})", callback_data='noop')])
-        buttons.append([InlineKeyboardButton("🔙 Back to Shop", callback_data='shop_menu')])
-        return InlineKeyboardMarkup(buttons)
-
-    @staticmethod
-    def pack_gifts_in_chat(pack_id: str, gifts: list):
-        buttons = []
-        gift_names = VirtualGifts.GIFTS
-        for i in range(0, len(gifts), 3):
-            row = [InlineKeyboardButton(
-                f"{g} {gift_names.get(g, '')}",
-                callback_data=f'packgift_{pack_id}_{g}'
-            ) for g in gifts[i:i+3]]
-            buttons.append(row)
-        buttons.append([InlineKeyboardButton("🔙 Back to Chat", callback_data='back_to_chat')])
-        return InlineKeyboardMarkup(buttons)
-    
     @staticmethod
     def language_selection():
         return InlineKeyboardMarkup([
@@ -660,26 +549,6 @@ class Keyboards:
             [InlineKeyboardButton("🔙 Back", callback_data='view_profile')]
         ])
     
-    @staticmethod
-    def chat_controls_with_packs(owned_packs: list):
-        base = [
-            [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
-             InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
-        ]
-        pack_btns = [InlineKeyboardButton(
-            f"🎀 {GIFT_PACKS[pid]['name']}", callback_data=f'use_pack_{pid}'
-        ) for pid in owned_packs if pid in GIFT_PACKS]
-        if pack_btns:
-            base.append(pack_btns[:2])
-        base += [
-            [InlineKeyboardButton("💾 Save Chat", callback_data='save_chat')],
-            [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
-            [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
-             InlineKeyboardButton("🛑 End", callback_data='end_chat')],
-            [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
-        ]
-        return InlineKeyboardMarkup(base)
-
     @staticmethod
     def admin_panel():
         return InlineKeyboardMarkup([
@@ -1475,18 +1344,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         else:
             await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
-    elif data == 'send_compliment':
-        compliment = random.choice(Compliments.LIST)
-        partner_id = matchmaking.get_partner(user_id)
-        if partner_id:
-            with database.get_db() as db:
-                user = database.get_user(db, user_id)
-            if user:
-                await query.edit_message_text(f"💬 **Compliment sent!**\n\n_{compliment}_", parse_mode='Markdown')
-                await context.bot.send_message(partner_id, f"💬 **{user.nickname} sent you a compliment:**\n\n{compliment}", parse_mode='Markdown')
-        else:
-            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
-    
     elif data == 'fun_fact':
         fact = random.choice(FunFacts.FACTS)
         partner_id = matchmaking.get_partner(user_id)
@@ -1502,33 +1359,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if partner_id:
             await query.edit_message_text(f"📅 **Today's Topic**\n\nLet's talk about: {topic}", parse_mode='Markdown')
             await context.bot.send_message(partner_id, f"📅 **Today's Topic**\n\nLet's talk about: {topic}", parse_mode='Markdown')
-        else:
-            await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
-    
-    elif data == 'send_gift':
-        await query.edit_message_text(
-            "🎁 **Send a Virtual Gift**\n\nChoose a gift to send to your partner:",
-            reply_markup=Keyboards.virtual_gifts(),
-            parse_mode='Markdown'
-        )
-    
-    elif data.startswith('gift_'):
-        emoji = data.replace('gift_', '')
-        gift_name = VirtualGifts.GIFTS.get(emoji, 'Gift')
-        partner_id = matchmaking.get_partner(user_id)
-        if partner_id:
-            with database.get_db() as db:
-                user = database.get_user(db, user_id)
-                if user:
-                    await context.bot.send_message(
-                        partner_id, 
-                        f"🎁 **{user.nickname} sent you a {gift_name}!** {emoji}",
-                        parse_mode='Markdown'
-                    )
-                    await query.edit_message_text(
-                        f"✅ You sent a {gift_name} {emoji} to your partner!",
-                        parse_mode='Markdown'
-                    )
         else:
             await query.edit_message_text("❌ You're not in a chat right now.", reply_markup=Keyboards.main_menu())
     
@@ -1580,32 +1410,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'refresh_search':
         await handle_refresh_search_callback(query, context)
     
-    # Gift shop
-    elif data == 'shop_menu':
-        await handle_shop_menu_callback(query, context)
-
-    elif data.startswith('shop_view_'):
-        await handle_shop_view_callback(query, context)
-
-    elif data.startswith('buy_pack_'):
-        await handle_buy_pack_callback(query, context)
-
-    elif data.startswith('use_pack_'):
-        pack_id = data.replace('use_pack_', '')
-        if pack_id in GIFT_PACKS:
-            partner_id = matchmaking.get_partner(user_id)
-            if not partner_id:
-                await query.edit_message_text("❌ You're not in a chat.", reply_markup=Keyboards.main_menu())
-            else:
-                await query.edit_message_text(
-                    f"🎀 **{GIFT_PACKS[pack_id]['name']}**\n\nChoose a gift to send:",
-                    reply_markup=Keyboards.pack_gifts_in_chat(pack_id, GIFT_PACKS[pack_id]['gifts']),
-                    parse_mode='Markdown'
-                )
-
-    elif data.startswith('packgift_'):
-        await handle_packgift_callback(query, context)
-
     # Referral
     elif data == 'referral_menu':
         await handle_referral_menu_callback(query, context)
@@ -3081,34 +2885,11 @@ async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         f"🔗 **Your Referral Link**\n\n"
         f"Share this link and earn **{REFERRAL_POINTS:.0f} point** for every new user who joins!\n\n"
         f"`{ref_link}`\n\n"
-        f"🌟 **Your Points:** {points:.1f}\n\n"
-        f"Use points to buy gift packs in the 🛍️ Gift Shop!\n"
-        f"Each gift pack lets you send special gifts during chats.",
+        f"🌟 **Your Points:** {points:.1f}",
         parse_mode='Markdown',
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛍️ Visit Gift Shop", callback_data='shop_menu')],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
         ])
-    )
-
-
-async def shop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /shop command"""
-    if is_user_silent_banned(update.effective_user.id):
-        return
-    user_id = update.effective_user.id
-    with database.get_db() as db:
-        user = database.get_user(db, user_id)
-        if not user:
-            await update.message.reply_text("❌ Please register first using /start")
-            return
-        owned = database.get_user_purchased_packs(db, user_id)
-        points = user.points or 0.0
-    await update.message.reply_text(
-        "🛍️ **Gift Pack Shop**\n\nBuy gift packs with your points and send special gifts during chats!\n\n"
-        "Earn points by sharing your referral link.",
-        reply_markup=Keyboards.shop_menu(GIFT_PACKS, owned, points),
-        parse_mode='Markdown'
     )
 
 
@@ -3128,129 +2909,12 @@ async def handle_referral_menu_callback(query, context: ContextTypes.DEFAULT_TYP
         f"🔗 **Your Referral Link**\n\n"
         f"Share this link and earn **{REFERRAL_POINTS:.0f} point** for every new user who joins!\n\n"
         f"`{ref_link}`\n\n"
-        f"🌟 **Your Points:** {points:.1f}\n\n"
-        f"Use your points in the 🛍️ Gift Shop to buy gift packs!\n"
-        f"Each pack lets you send premium gifts to your chat partner.",
+        f"🌟 **Your Points:** {points:.1f}",
         parse_mode='Markdown',
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛍️ Visit Gift Shop", callback_data='shop_menu')],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
         ])
     )
-
-
-async def handle_shop_menu_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show gift shop"""
-    user_id = query.from_user.id
-    with database.get_db() as db:
-        user = database.get_user(db, user_id)
-        if not user:
-            await query.edit_message_text("❌ Please register first using /start")
-            return
-        owned = database.get_user_purchased_packs(db, user_id)
-        points = user.points or 0.0
-    await query.edit_message_text(
-        "🛍️ **Gift Pack Shop**\n\nBuy gift packs with your points and send special gifts during chats!\n\n"
-        "Earn points by sharing your referral link via 🔗 Referral & Points.",
-        reply_markup=Keyboards.shop_menu(GIFT_PACKS, owned, points),
-        parse_mode='Markdown'
-    )
-
-
-async def handle_shop_view_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show pack detail page"""
-    pack_id = query.data.replace('shop_view_', '')
-    pack = GIFT_PACKS.get(pack_id)
-    if not pack:
-        await query.edit_message_text("❌ Pack not found.", reply_markup=Keyboards.main_menu())
-        return
-    user_id = query.from_user.id
-    with database.get_db() as db:
-        user = database.get_user(db, user_id)
-        owned = database.has_purchased_pack(db, user_id, pack_id)
-        points = user.points or 0.0 if user else 0.0
-    gifts_display = "  ".join(pack['gifts'])
-    await query.edit_message_text(
-        f"{pack['name']}\n\n"
-        f"📦 **Description:** {pack['description']}\n"
-        f"🎁 **Gifts:** {gifts_display}\n"
-        f"💰 **Cost:** {pack['cost']:.0f} pts\n\n"
-        f"{'✅ You own this pack!' if owned else f'🌟 Your balance: {points:.1f} pts'}",
-        reply_markup=Keyboards.pack_detail(pack_id, pack, owned, points),
-        parse_mode='Markdown'
-    )
-
-
-async def handle_buy_pack_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle gift pack purchase"""
-    pack_id = query.data.replace('buy_pack_', '')
-    pack = GIFT_PACKS.get(pack_id)
-    if not pack:
-        await query.edit_message_text("❌ Pack not found.")
-        return
-    user_id = query.from_user.id
-    with database.get_db() as db:
-        success = database.purchase_gift_pack(db, user_id, pack_id, pack['cost'])
-        user = database.get_user(db, user_id)
-        remaining = user.points or 0.0 if user else 0.0
-    if success:
-        await query.edit_message_text(
-            f"🎉 **Purchase Successful!**\n\n"
-            f"You bought the **{pack['name']}**!\n"
-            f"🌟 Remaining points: {remaining:.1f}\n\n"
-            f"Use this pack during a chat by tapping the pack button in chat controls.",
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🛍️ Back to Shop", callback_data='shop_menu')],
-                [InlineKeyboardButton("🔙 Main Menu", callback_data='main_menu')]
-            ])
-        )
-    else:
-        await query.edit_message_text(
-            f"❌ **Purchase Failed**\n\nNot enough points or already owned.\n"
-            f"Pack cost: {pack['cost']:.0f} pts\n🌟 Your balance: {remaining:.1f} pts\n\n"
-            f"Earn more points by sharing your referral link!",
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔗 Get Referral Link", callback_data='referral_menu')],
-                [InlineKeyboardButton("🛍️ Back to Shop", callback_data='shop_menu')]
-            ])
-        )
-
-
-async def handle_packgift_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle sending a gift from an owned pack during chat"""
-    user_id = query.from_user.id
-    parts = query.data.split('_', 2)  # packgift_{pack_id}_{gift_emoji}
-    if len(parts) < 3:
-        await query.answer("Invalid gift selection.")
-        return
-    pack_id = parts[1]
-    gift_emoji = parts[2]
-    pack = GIFT_PACKS.get(pack_id)
-    if not pack or gift_emoji not in pack['gifts']:
-        await query.answer("Invalid gift.")
-        return
-    with database.get_db() as db:
-        if not database.has_purchased_pack(db, user_id, pack_id):
-            await query.answer("You don't own this pack!")
-            return
-    partner_id = matchmaking.get_partner(user_id)
-    if not partner_id:
-        await query.edit_message_text("❌ You're not in an active chat.", reply_markup=Keyboards.main_menu())
-        return
-    gift_name = VirtualGifts.GIFTS.get(gift_emoji, gift_emoji)
-    gift_msg = f"🎀 **Premium Gift from {pack['name']}**\n\n{gift_emoji} **{gift_name}**\n\n✨ A special gift just for you!"
-    try:
-        await context.bot.send_message(partner_id, gift_msg, parse_mode='Markdown', protect_content=True)
-        await query.edit_message_text(
-            f"🎀 Sent **{gift_emoji} {gift_name}** from your {pack['name']}!",
-            reply_markup=Keyboards.chat_controls(),
-            parse_mode='Markdown'
-        )
-    except TelegramError as e:
-        logger.error(f"Failed to send pack gift: {e}")
-        await query.edit_message_text("❌ Failed to send gift. Your partner may have left.", reply_markup=Keyboards.chat_controls())
 
 
 async def handle_admin_lock_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -3440,7 +3104,6 @@ def main() -> None:
     application.add_handler(CommandHandler("viewonce", viewonce_command))
     application.add_handler(CommandHandler("admin", admin_command))
     application.add_handler(CommandHandler("referral", referral_command))
-    application.add_handler(CommandHandler("shop", shop_command))
     
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
@@ -3460,7 +3123,6 @@ def main() -> None:
             BotCommand("saved", "View saved chats"),
             BotCommand("profile", "View/edit your profile"),
             BotCommand("referral", "Get your referral link and points"),
-            BotCommand("shop", "Visit the gift pack shop"),
             BotCommand("viewonce", "Send a view-once disappearing photo"),
             BotCommand("help", "Show help menu"),
             BotCommand("privacy", "Privacy information"),

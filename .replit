@@ -29,7 +29,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"Bot code updated - Deploy to Railway to apply fixes\""
+args = "python3 anonymous_chat_bot.py"
 
 [deployment]
 deploymentTarget = "vm"

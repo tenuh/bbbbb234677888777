@@ -45,6 +45,37 @@ ADMIN_ID = 1395596220  # Fixed admin ID
 RETRY_MATCHING_INTERVAL = 10  # seconds between matching retries
 MAX_RETRY_ATTEMPTS = 12  # Maximum retry attempts (2 minutes)
 
+UNLOCK_POINTS_REQUIRED = 5.0   # unlock points needed to auto-unlock a locked account
+REFERRAL_POINTS = 1.0          # points awarded per successful referral
+UNLOCK_REFERRAL_POINTS = 0.5   # points awarded per referral while locked
+
+GIFT_PACKS = {
+    'starter': {
+        'name': '🌟 Starter Pack',
+        'cost': 5.0,
+        'gifts': ['🌹', '⭐', '☕'],
+        'description': 'Basic gift set — 3 gifts',
+    },
+    'fun': {
+        'name': '🎉 Fun Pack',
+        'cost': 8.0,
+        'gifts': ['🎁', '🍕', '🎵', '🔥', '🏆'],
+        'description': 'All the fun — 5 gifts',
+    },
+    'romantic': {
+        'name': '❤️ Romantic Pack',
+        'cost': 10.0,
+        'gifts': ['🌹', '❤️', '💎', '🌟'],
+        'description': 'For special moments — 4 gifts',
+    },
+    'premium': {
+        'name': '💎 Premium Pack',
+        'cost': 20.0,
+        'gifts': ['🌹','🎁','⭐','❤️','🍕','🍰','☕','🎵','🌈','🔥','💎','🏆','🎨','📚','🌟'],
+        'description': 'Every gift available — 15 gifts',
+    },
+}
+
 POLLER_LOCK_CONNECTION = None
 
 
@@ -238,14 +269,16 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
     PROFILE_UPDATED = "✅ Profile updated successfully!"
     PROFILE_INFO = """👤 **Your Profile**
 
-🎭 **Nickname:** {}
-👤 **Gender:** {}
-😊 **Mood:** {}
-📝 **Bio:** {}
-🎂 **Age:** {}
-📍 **Location:** {}
-💭 **Interests:** {}
-📅 **Member Since:** {}"""
+🎭 **Nickname:** {nickname}
+👤 **Gender:** {gender}
+😊 **Mood:** {mood}
+📝 **Bio:** {bio}
+🎂 **Age:** {age}
+📍 **Location:** {location}
+💭 **Interests:** {interests}
+💬 **Total Chats:** {total_chats}
+🌟 **Points:** {points}
+📅 **Member Since:** {since}"""
     
     WARNING_MESSAGE = "⚠️ **Content Warning**\n\nYour message may contain inappropriate content. Please be respectful in your conversations."
     SAVE_REQUEST_SENT = "💾 Save request sent to your partner. Waiting for response."
@@ -483,10 +516,12 @@ class Keyboards:
     def main_menu():
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("💬 Find Partner", callback_data='find_partner')],
-            [InlineKeyboardButton("💾 Saved Chats", callback_data='view_saved_chats')],
+            [InlineKeyboardButton("💾 Saved Chats", callback_data='view_saved_chats'),
+             InlineKeyboardButton("🛍️ Gift Shop", callback_data='shop_menu')],
             [InlineKeyboardButton("👤 My Profile", callback_data='view_profile'), 
              InlineKeyboardButton("❓ Help", callback_data='help_menu')],
-            [InlineKeyboardButton("🔒 Privacy", callback_data='privacy_info')]
+            [InlineKeyboardButton("🔗 Referral & Points", callback_data='referral_menu'),
+             InlineKeyboardButton("🔒 Privacy", callback_data='privacy_info')]
         ])
     
     @staticmethod
@@ -575,9 +610,47 @@ class Keyboards:
             [InlineKeyboardButton("💭 Set Interests", callback_data='set_interests')],
             [InlineKeyboardButton("😊 Set Mood", callback_data='set_mood')],
             [InlineKeyboardButton("💾 Saved Chats", callback_data='view_saved_chats')],
+            [InlineKeyboardButton("🔗 My Referral Link", callback_data='referral_menu'),
+             InlineKeyboardButton("🛍️ Gift Shop", callback_data='shop_menu')],
             [InlineKeyboardButton("🌐 Language", callback_data='change_language')],
             [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
         ])
+
+    @staticmethod
+    def shop_menu(packs: dict, owned_packs: list, user_points: float):
+        buttons = []
+        for pack_id, pack in packs.items():
+            owned = pack_id in owned_packs
+            label = f"{'✅' if owned else '🛒'} {pack['name']} — {pack['cost']:.0f} pts"
+            buttons.append([InlineKeyboardButton(label, callback_data=f'shop_view_{pack_id}')])
+        buttons.append([InlineKeyboardButton(f"🌟 Your Points: {user_points:.1f}", callback_data='noop')])
+        buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')])
+        return InlineKeyboardMarkup(buttons)
+
+    @staticmethod
+    def pack_detail(pack_id: str, pack: dict, owned: bool, user_points: float):
+        buttons = []
+        if owned:
+            buttons.append([InlineKeyboardButton("✅ Already Owned", callback_data='noop')])
+        elif user_points >= pack['cost']:
+            buttons.append([InlineKeyboardButton(f"💳 Buy for {pack['cost']:.0f} pts", callback_data=f'buy_pack_{pack_id}')])
+        else:
+            buttons.append([InlineKeyboardButton(f"❌ Need {pack['cost']:.0f} pts (you have {user_points:.1f})", callback_data='noop')])
+        buttons.append([InlineKeyboardButton("🔙 Back to Shop", callback_data='shop_menu')])
+        return InlineKeyboardMarkup(buttons)
+
+    @staticmethod
+    def pack_gifts_in_chat(pack_id: str, gifts: list):
+        buttons = []
+        gift_names = VirtualGifts.GIFTS
+        for i in range(0, len(gifts), 3):
+            row = [InlineKeyboardButton(
+                f"{g} {gift_names.get(g, '')}",
+                callback_data=f'packgift_{pack_id}_{g}'
+            ) for g in gifts[i:i+3]]
+            buttons.append(row)
+        buttons.append([InlineKeyboardButton("🔙 Back to Chat", callback_data='back_to_chat')])
+        return InlineKeyboardMarkup(buttons)
     
     @staticmethod
     def language_selection():
@@ -587,6 +660,26 @@ class Keyboards:
             [InlineKeyboardButton("🔙 Back", callback_data='view_profile')]
         ])
     
+    @staticmethod
+    def chat_controls_with_packs(owned_packs: list):
+        base = [
+            [InlineKeyboardButton("🎁 Send Gift", callback_data='send_gift'),
+             InlineKeyboardButton("💬 Compliment", callback_data='send_compliment')],
+        ]
+        pack_btns = [InlineKeyboardButton(
+            f"🎀 {GIFT_PACKS[pid]['name']}", callback_data=f'use_pack_{pid}'
+        ) for pid in owned_packs if pid in GIFT_PACKS]
+        if pack_btns:
+            base.append(pack_btns[:2])
+        base += [
+            [InlineKeyboardButton("💾 Save Chat", callback_data='save_chat')],
+            [InlineKeyboardButton("👤 View Profile", callback_data='view_partner_profile')],
+            [InlineKeyboardButton("⏭️ Skip", callback_data='skip_chat'),
+             InlineKeyboardButton("🛑 End", callback_data='end_chat')],
+            [InlineKeyboardButton("🚨 Report", callback_data='report_user')]
+        ]
+        return InlineKeyboardMarkup(base)
+
     @staticmethod
     def admin_panel():
         return InlineKeyboardMarkup([
@@ -901,27 +994,86 @@ async def handle_screenshot_attempt(update: Update, context: ContextTypes.DEFAUL
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /start command"""
+    """Handle /start command — also processes referral and unlock deep links"""
     user_id = update.effective_user.id
     telegram_user = update.effective_user
-    
+    bot_username = (await context.bot.get_me()).username
+
+    # ── Deep link processing ──────────────────────────────────────────────────
+    payload = context.args[0] if context.args else None
+
     with database.get_db() as db:
         user = database.get_user(db, user_id)
-        
+
+        # Process deep link BEFORE checking banned/locked status so new users
+        # still get credited even if they come through an unlock link
+        if payload and not user:
+            # New user joining via referral or unlock link
+            if payload.startswith('ref_'):
+                ref_code = payload[4:]
+                referrer = database.get_user_by_referral_code(db, ref_code)
+                if referrer and referrer.user_id != user_id:
+                    if referrer.is_locked:
+                        pts, unlocked = database.add_unlock_points(db, referrer.user_id, UNLOCK_REFERRAL_POINTS)
+                        if unlocked:
+                            try:
+                                await context.bot.send_message(
+                                    referrer.user_id,
+                                    "🎉 **Account Unlocked!**\n\nYou collected enough referrals — your account is now unlocked! Welcome back.",
+                                    parse_mode='Markdown'
+                                )
+                            except Exception:
+                                pass
+                        else:
+                            try:
+                                await context.bot.send_message(
+                                    referrer.user_id,
+                                    f"🔓 Someone joined via your unlock link! +{UNLOCK_REFERRAL_POINTS} pts → **{pts:.1f}/{UNLOCK_POINTS_REQUIRED:.0f}** needed to unlock.",
+                                    parse_mode='Markdown'
+                                )
+                            except Exception:
+                                pass
+                    else:
+                        new_pts = database.add_points(db, referrer.user_id, REFERRAL_POINTS)
+                        try:
+                            await context.bot.send_message(
+                                referrer.user_id,
+                                f"🎉 Someone joined via your referral link! +{REFERRAL_POINTS:.0f} point → **{new_pts:.1f} pts** total.",
+                                parse_mode='Markdown'
+                            )
+                        except Exception:
+                            pass
+                    # Store who referred this new user
+                    context.user_data['pending_referred_by'] = referrer.user_id
+
         if user:
             if user.is_silent_banned:
-                return  # Silent — no response at all
+                return
             if user.is_banned:
                 await update.message.reply_text(
                     f"❌ **Account Suspended**\n\nYour account has been suspended.\n**Reason:** {user.ban_reason or 'Policy violation'}\n\nContact support if you believe this is an error.",
                     parse_mode='Markdown'
                 )
                 return
-            
-            # Existing user - show main menu
+            if user.is_locked:
+                ref_code = database.ensure_referral_code(db, user_id)
+                unlock_link = f"https://t.me/{bot_username}?start=ref_{ref_code}"
+                pts = user.unlock_points or 0.0
+                await update.message.reply_text(
+                    f"🔒 **Account Locked**\n\n"
+                    f"**Reason:** {user.lock_reason or 'Policy violation'}\n\n"
+                    f"To unlock your account, share the link below with new users.\n"
+                    f"Each new user who joins gives you **{UNLOCK_REFERRAL_POINTS} pts**.\n"
+                    f"You need **{UNLOCK_POINTS_REQUIRED:.0f} pts** total to unlock.\n\n"
+                    f"📊 Progress: **{pts:.1f}/{UNLOCK_POINTS_REQUIRED:.0f} pts**\n\n"
+                    f"🔗 Your unlock link:\n`{unlock_link}`",
+                    parse_mode='Markdown'
+                )
+                return
+
             database.update_user_activity(db, user_id)
             partner = matchmaking.get_partner(user_id)
-            
+
             if partner:
                 await update.message.reply_text(Messages.ALREADY_IN_CHAT, reply_markup=Keyboards.chat_controls())
             elif user_id in matchmaking.waiting_users:
@@ -933,7 +1085,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     parse_mode='Markdown'
                 )
         else:
-            # New user - start registration
             await update.message.reply_text(
                 Messages.WELCOME,
                 reply_markup=Keyboards.gender_selection(),
@@ -947,17 +1098,29 @@ async def find_partner_command(update: Update, context: ContextTypes.DEFAULT_TYP
 async def handle_find_partner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle partner finding"""
     user_id = update.effective_user.id
-    
+
     with database.get_db() as db:
         user = database.get_user(db, user_id)
         if not user:
             await update.message.reply_text("❌ Please register first using /start")
             return
-        
+
         if user.is_silent_banned:
-            return  # Silent — no response
+            return
         if user.is_banned:
             await update.message.reply_text("❌ Your account is suspended.")
+            return
+        if user.is_locked:
+            bot_info = await context.bot.get_me()
+            ref_code = database.ensure_referral_code(db, user_id)
+            unlock_link = f"https://t.me/{bot_info.username}?start=ref_{ref_code}"
+            pts = user.unlock_points or 0.0
+            await update.message.reply_text(
+                f"🔒 **Account Locked** — you cannot start chats.\n\n"
+                f"Share this link to collect unlock points:\n`{unlock_link}`\n\n"
+                f"Progress: **{pts:.1f}/{UNLOCK_POINTS_REQUIRED:.0f} pts**",
+                parse_mode='Markdown'
+            )
             return
     
     if matchmaking.get_partner(user_id):
@@ -1073,21 +1236,22 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if not user:
             await update.message.reply_text("❌ Please register first using /start")
             return
-        
+
         interests = ", ".join([interest.name for interest in user.interests]) if user.interests else "None set"
         created_date = user.created_at.strftime("%B %d, %Y") if user.created_at else "Unknown"
         mood_display = f"{user.mood} {Moods.OPTIONS.get(user.mood, '')}" if user.mood else "Not set"
-        
+
         profile_text = Messages.PROFILE_INFO.format(
-            user.nickname,
-            user.gender.title(),
-            mood_display,
-            user.bio or "Not set",
-            user.age or "Not set",
-            user.location or "Not set",
-            interests,
-            user.total_chats,
-            created_date
+            nickname=user.nickname,
+            gender=user.gender.title(),
+            mood=mood_display,
+            bio=user.bio or "Not set",
+            age=user.age or "Not set",
+            location=user.location or "Not set",
+            interests=interests,
+            total_chats=user.total_chats or 0,
+            points=f"{user.points or 0.0:.1f}",
+            since=created_date,
         )
         
         await update.message.reply_text(
@@ -1416,6 +1580,40 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == 'refresh_search':
         await handle_refresh_search_callback(query, context)
     
+    # Gift shop
+    elif data == 'shop_menu':
+        await handle_shop_menu_callback(query, context)
+
+    elif data.startswith('shop_view_'):
+        await handle_shop_view_callback(query, context)
+
+    elif data.startswith('buy_pack_'):
+        await handle_buy_pack_callback(query, context)
+
+    elif data.startswith('use_pack_'):
+        pack_id = data.replace('use_pack_', '')
+        if pack_id in GIFT_PACKS:
+            partner_id = matchmaking.get_partner(user_id)
+            if not partner_id:
+                await query.edit_message_text("❌ You're not in a chat.", reply_markup=Keyboards.main_menu())
+            else:
+                await query.edit_message_text(
+                    f"🎀 **{GIFT_PACKS[pack_id]['name']}**\n\nChoose a gift to send:",
+                    reply_markup=Keyboards.pack_gifts_in_chat(pack_id, GIFT_PACKS[pack_id]['gifts']),
+                    parse_mode='Markdown'
+                )
+
+    elif data.startswith('packgift_'):
+        await handle_packgift_callback(query, context)
+
+    # Referral
+    elif data == 'referral_menu':
+        await handle_referral_menu_callback(query, context)
+
+    # No-op button (info only)
+    elif data == 'noop':
+        pass
+
     # Admin panel
     elif data.startswith('admin_') and is_admin(user_id):
         await handle_admin_callback(query, context)
@@ -1457,17 +1655,29 @@ async def handle_gender_selection(query, context: ContextTypes.DEFAULT_TYPE) -> 
 async def handle_find_partner_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle find partner button callback"""
     user_id = query.from_user.id
-    
+
     with database.get_db() as db:
         user = database.get_user(db, user_id)
         if not user:
             await query.edit_message_text("❌ Please register first using /start")
             return
-        
+
         if user.is_silent_banned:
-            return  # Silent — no response
+            return
         if user.is_banned:
             await query.edit_message_text("❌ Your account is suspended.")
+            return
+        if user.is_locked:
+            bot_info = await context.bot.get_me()
+            ref_code = database.ensure_referral_code(db, user_id)
+            unlock_link = f"https://t.me/{bot_info.username}?start=ref_{ref_code}"
+            pts = user.unlock_points or 0.0
+            await query.edit_message_text(
+                f"🔒 **Account Locked** — you cannot start chats.\n\n"
+                f"Share this link to collect unlock points:\n`{unlock_link}`\n\n"
+                f"Progress: **{pts:.1f}/{UNLOCK_POINTS_REQUIRED:.0f} pts**",
+                parse_mode='Markdown'
+            )
             return
     
     if matchmaking.get_partner(user_id):
@@ -1504,21 +1714,22 @@ async def show_profile_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
         if not user:
             await query.edit_message_text("❌ Please register first using /start")
             return
-        
+
         interests = ", ".join([interest.name for interest in user.interests]) if user.interests else "None set"
         created_date = user.created_at.strftime("%B %d, %Y") if user.created_at else "Unknown"
         mood_display = f"{user.mood} {Moods.OPTIONS.get(user.mood, '')}" if user.mood else "Not set"
-        
+
         profile_text = Messages.PROFILE_INFO.format(
-            user.nickname,
-            user.gender.title(),
-            mood_display,
-            user.bio or "Not set",
-            user.age or "Not set",
-            user.location or "Not set",
-            interests,
-            user.total_chats,
-            created_date
+            nickname=user.nickname,
+            gender=user.gender.title(),
+            mood=mood_display,
+            bio=user.bio or "Not set",
+            age=user.age or "Not set",
+            location=user.location or "Not set",
+            interests=interests,
+            total_chats=user.total_chats or 0,
+            points=f"{user.points or 0.0:.1f}",
+            since=created_date,
         )
         
         await query.edit_message_text(
@@ -2083,15 +2294,18 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
     
     elif data == 'admin_users':
         user_mgmt_menu = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🚫 Ban User", callback_data='admin_ban_user')],
-            [InlineKeyboardButton("✅ Unban User", callback_data='admin_unban_user')],
+            [InlineKeyboardButton("🚫 Ban User", callback_data='admin_ban_user'),
+             InlineKeyboardButton("✅ Unban User", callback_data='admin_unban_user')],
             [InlineKeyboardButton("📋 List Banned", callback_data='admin_list_banned')],
-            [InlineKeyboardButton("🔇 Mute User", callback_data='admin_mute_user')],
-            [InlineKeyboardButton("🔊 Unmute User", callback_data='admin_unmute_user')],
+            [InlineKeyboardButton("🔇 Mute User", callback_data='admin_mute_user'),
+             InlineKeyboardButton("🔊 Unmute User", callback_data='admin_unmute_user')],
             [InlineKeyboardButton("📋 List Muted", callback_data='admin_list_muted')],
-            [InlineKeyboardButton("👻 Silent Ban", callback_data='admin_silent_ban')],
-            [InlineKeyboardButton("👻 Silent Unban", callback_data='admin_silent_unban')],
+            [InlineKeyboardButton("👻 Silent Ban", callback_data='admin_silent_ban'),
+             InlineKeyboardButton("👻 Silent Unban", callback_data='admin_silent_unban')],
             [InlineKeyboardButton("📋 List Silent Banned", callback_data='admin_list_silent_banned')],
+            [InlineKeyboardButton("🔒 Lock User", callback_data='admin_lock_user'),
+             InlineKeyboardButton("🔓 Unlock User", callback_data='admin_unlock_user')],
+            [InlineKeyboardButton("📋 List Locked", callback_data='admin_list_locked')],
             [InlineKeyboardButton("🔙 Back", callback_data='admin_panel_back')]
         ])
         await query.edit_message_text(
@@ -2184,6 +2398,34 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         context.user_data['admin_state'] = 'awaiting_silent_unban'
 
+    elif data == 'admin_lock_user':
+        await query.edit_message_text(
+            "🔒 **Lock User**\n\nSend the user ID to lock.\nLocked users cannot chat but can unlock themselves via referrals.",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_lock_user'
+
+    elif data == 'admin_unlock_user':
+        await query.edit_message_text(
+            "🔓 **Unlock User**\n\nSend the user ID to unlock:",
+            parse_mode='Markdown'
+        )
+        context.user_data['admin_state'] = 'awaiting_unlock_user'
+
+    elif data == 'admin_list_locked':
+        with database.get_db() as db:
+            locked_users = database.get_locked_users(db)
+            if not locked_users:
+                await query.edit_message_text("📋 **Locked Users**\n\n✅ No locked users.", parse_mode='Markdown')
+                return
+            text = "📋 **Locked Users**\n\n"
+            for u in locked_users[:15]:
+                lock_date = u.lock_date.strftime('%Y-%m-%d') if u.lock_date else 'Unknown'
+                text += f"**{u.nickname}** (ID: `{u.user_id}`)\n📝 {u.lock_reason or 'No reason'} | 📅 {lock_date}\n🔓 {u.unlock_points or 0.0:.1f}/{UNLOCK_POINTS_REQUIRED:.0f} pts\n\n"
+            if len(locked_users) > 15:
+                text += f"... and {len(locked_users) - 15} more"
+            await query.edit_message_text(text, parse_mode='Markdown')
+
     elif data == 'admin_list_silent_banned':
         with database.get_db() as db:
             sb_users = database.get_silent_banned_users(db)
@@ -2270,6 +2512,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             return
         elif admin_state == 'awaiting_silent_unban':
             await handle_admin_silent_unban(update, context)
+            return
+        elif admin_state == 'awaiting_lock_user':
+            await handle_admin_lock_user(update, context)
+            return
+        elif admin_state == 'awaiting_lock_reason':
+            await handle_admin_lock_reason(update, context)
+            return
+        elif admin_state == 'awaiting_unlock_user':
+            await handle_admin_unlock_user(update, context)
             return
     
     # Check for profile editing states
@@ -2812,6 +3063,299 @@ async def handle_admin_ban_reason(update: Update, context: ContextTypes.DEFAULT_
     context.user_data.pop('admin_state', None)
     context.user_data.pop('ban_user_id', None)
 
+async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /referral command — show referral link and points balance"""
+    if is_user_silent_banned(update.effective_user.id):
+        return
+    user_id = update.effective_user.id
+    bot_info = await context.bot.get_me()
+    with database.get_db() as db:
+        user = database.get_user(db, user_id)
+        if not user:
+            await update.message.reply_text("❌ Please register first using /start")
+            return
+        ref_code = database.ensure_referral_code(db, user_id)
+        points = user.points or 0.0
+    ref_link = f"https://t.me/{bot_info.username}?start=ref_{ref_code}"
+    await update.message.reply_text(
+        f"🔗 **Your Referral Link**\n\n"
+        f"Share this link and earn **{REFERRAL_POINTS:.0f} point** for every new user who joins!\n\n"
+        f"`{ref_link}`\n\n"
+        f"🌟 **Your Points:** {points:.1f}\n\n"
+        f"Use points to buy gift packs in the 🛍️ Gift Shop!\n"
+        f"Each gift pack lets you send special gifts during chats.",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🛍️ Visit Gift Shop", callback_data='shop_menu')],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
+        ])
+    )
+
+
+async def shop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /shop command"""
+    if is_user_silent_banned(update.effective_user.id):
+        return
+    user_id = update.effective_user.id
+    with database.get_db() as db:
+        user = database.get_user(db, user_id)
+        if not user:
+            await update.message.reply_text("❌ Please register first using /start")
+            return
+        owned = database.get_user_purchased_packs(db, user_id)
+        points = user.points or 0.0
+    await update.message.reply_text(
+        "🛍️ **Gift Pack Shop**\n\nBuy gift packs with your points and send special gifts during chats!\n\n"
+        "Earn points by sharing your referral link.",
+        reply_markup=Keyboards.shop_menu(GIFT_PACKS, owned, points),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_referral_menu_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show referral info as callback"""
+    user_id = query.from_user.id
+    bot_info = await context.bot.get_me()
+    with database.get_db() as db:
+        user = database.get_user(db, user_id)
+        if not user:
+            await query.edit_message_text("❌ Please register first using /start")
+            return
+        ref_code = database.ensure_referral_code(db, user_id)
+        points = user.points or 0.0
+    ref_link = f"https://t.me/{bot_info.username}?start=ref_{ref_code}"
+    await query.edit_message_text(
+        f"🔗 **Your Referral Link**\n\n"
+        f"Share this link and earn **{REFERRAL_POINTS:.0f} point** for every new user who joins!\n\n"
+        f"`{ref_link}`\n\n"
+        f"🌟 **Your Points:** {points:.1f}\n\n"
+        f"Use your points in the 🛍️ Gift Shop to buy gift packs!\n"
+        f"Each pack lets you send premium gifts to your chat partner.",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🛍️ Visit Gift Shop", callback_data='shop_menu')],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data='main_menu')]
+        ])
+    )
+
+
+async def handle_shop_menu_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show gift shop"""
+    user_id = query.from_user.id
+    with database.get_db() as db:
+        user = database.get_user(db, user_id)
+        if not user:
+            await query.edit_message_text("❌ Please register first using /start")
+            return
+        owned = database.get_user_purchased_packs(db, user_id)
+        points = user.points or 0.0
+    await query.edit_message_text(
+        "🛍️ **Gift Pack Shop**\n\nBuy gift packs with your points and send special gifts during chats!\n\n"
+        "Earn points by sharing your referral link via 🔗 Referral & Points.",
+        reply_markup=Keyboards.shop_menu(GIFT_PACKS, owned, points),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_shop_view_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show pack detail page"""
+    pack_id = query.data.replace('shop_view_', '')
+    pack = GIFT_PACKS.get(pack_id)
+    if not pack:
+        await query.edit_message_text("❌ Pack not found.", reply_markup=Keyboards.main_menu())
+        return
+    user_id = query.from_user.id
+    with database.get_db() as db:
+        user = database.get_user(db, user_id)
+        owned = database.has_purchased_pack(db, user_id, pack_id)
+        points = user.points or 0.0 if user else 0.0
+    gifts_display = "  ".join(pack['gifts'])
+    await query.edit_message_text(
+        f"{pack['name']}\n\n"
+        f"📦 **Description:** {pack['description']}\n"
+        f"🎁 **Gifts:** {gifts_display}\n"
+        f"💰 **Cost:** {pack['cost']:.0f} pts\n\n"
+        f"{'✅ You own this pack!' if owned else f'🌟 Your balance: {points:.1f} pts'}",
+        reply_markup=Keyboards.pack_detail(pack_id, pack, owned, points),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_buy_pack_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle gift pack purchase"""
+    pack_id = query.data.replace('buy_pack_', '')
+    pack = GIFT_PACKS.get(pack_id)
+    if not pack:
+        await query.edit_message_text("❌ Pack not found.")
+        return
+    user_id = query.from_user.id
+    with database.get_db() as db:
+        success = database.purchase_gift_pack(db, user_id, pack_id, pack['cost'])
+        user = database.get_user(db, user_id)
+        remaining = user.points or 0.0 if user else 0.0
+    if success:
+        await query.edit_message_text(
+            f"🎉 **Purchase Successful!**\n\n"
+            f"You bought the **{pack['name']}**!\n"
+            f"🌟 Remaining points: {remaining:.1f}\n\n"
+            f"Use this pack during a chat by tapping the pack button in chat controls.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🛍️ Back to Shop", callback_data='shop_menu')],
+                [InlineKeyboardButton("🔙 Main Menu", callback_data='main_menu')]
+            ])
+        )
+    else:
+        await query.edit_message_text(
+            f"❌ **Purchase Failed**\n\nNot enough points or already owned.\n"
+            f"Pack cost: {pack['cost']:.0f} pts\n🌟 Your balance: {remaining:.1f} pts\n\n"
+            f"Earn more points by sharing your referral link!",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔗 Get Referral Link", callback_data='referral_menu')],
+                [InlineKeyboardButton("🛍️ Back to Shop", callback_data='shop_menu')]
+            ])
+        )
+
+
+async def handle_packgift_callback(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle sending a gift from an owned pack during chat"""
+    user_id = query.from_user.id
+    parts = query.data.split('_', 2)  # packgift_{pack_id}_{gift_emoji}
+    if len(parts) < 3:
+        await query.answer("Invalid gift selection.")
+        return
+    pack_id = parts[1]
+    gift_emoji = parts[2]
+    pack = GIFT_PACKS.get(pack_id)
+    if not pack or gift_emoji not in pack['gifts']:
+        await query.answer("Invalid gift.")
+        return
+    with database.get_db() as db:
+        if not database.has_purchased_pack(db, user_id, pack_id):
+            await query.answer("You don't own this pack!")
+            return
+    partner_id = matchmaking.get_partner(user_id)
+    if not partner_id:
+        await query.edit_message_text("❌ You're not in an active chat.", reply_markup=Keyboards.main_menu())
+        return
+    gift_name = VirtualGifts.GIFTS.get(gift_emoji, gift_emoji)
+    gift_msg = f"🎀 **Premium Gift from {pack['name']}**\n\n{gift_emoji} **{gift_name}**\n\n✨ A special gift just for you!"
+    try:
+        await context.bot.send_message(partner_id, gift_msg, parse_mode='Markdown', protect_content=True)
+        await query.edit_message_text(
+            f"🎀 Sent **{gift_emoji} {gift_name}** from your {pack['name']}!",
+            reply_markup=Keyboards.chat_controls(),
+            parse_mode='Markdown'
+        )
+    except TelegramError as e:
+        logger.error(f"Failed to send pack gift: {e}")
+        await query.edit_message_text("❌ Failed to send gift. Your partner may have left.", reply_markup=Keyboards.chat_controls())
+
+
+async def handle_admin_lock_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin lock user — get user ID then ask for reason"""
+    try:
+        user_id_to_lock = int(update.message.text.strip())
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_lock)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                context.user_data.pop('admin_state', None)
+                return
+            if user.is_locked:
+                await update.message.reply_text(f"⚠️ User **{user.nickname}** is already locked.", parse_mode='Markdown')
+                context.user_data.pop('admin_state', None)
+                return
+            context.user_data['lock_user_id'] = user_id_to_lock
+            context.user_data['admin_state'] = 'awaiting_lock_reason'
+            await update.message.reply_text(
+                f"🔒 **{user.nickname}** (ID: {user_id_to_lock})\n\nEnter lock reason (or send 'skip'):",
+                parse_mode='Markdown'
+            )
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+        context.user_data.pop('admin_state', None)
+
+
+async def handle_admin_lock_reason(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle lock reason input and execute lock"""
+    reason_text = update.message.text.strip()
+    user_id_to_lock = context.user_data.get('lock_user_id')
+    admin_id = update.effective_user.id
+    if not user_id_to_lock:
+        await update.message.reply_text("❌ Session expired. Try again.")
+        context.user_data.pop('admin_state', None)
+        return
+    lock_reason = None if reason_text.lower() == 'skip' else reason_text
+    with database.get_db() as db:
+        user = database.get_user(db, user_id_to_lock)
+        if not user:
+            await update.message.reply_text("❌ User not found.")
+            context.user_data.pop('admin_state', None)
+            return
+        database.lock_user(db, user_id_to_lock, admin_id, lock_reason)
+        partner_id = matchmaking.get_partner(user_id_to_lock)
+        if partner_id:
+            matchmaking.end_session(user_id_to_lock, partner_id)
+        bot_info = await context.bot.get_me()
+        ref_code = database.ensure_referral_code(db, user_id_to_lock)
+        unlock_link = f"https://t.me/{bot_info.username}?start=ref_{ref_code}"
+    try:
+        await context.bot.send_message(
+            user_id_to_lock,
+            f"🔒 **Your account has been locked.**\n\n"
+            f"**Reason:** {lock_reason or 'Policy violation'}\n\n"
+            f"To unlock, share this link and collect **{UNLOCK_POINTS_REQUIRED:.0f} pts** "
+            f"({UNLOCK_REFERRAL_POINTS} pt per new user):\n`{unlock_link}`",
+            parse_mode='Markdown'
+        )
+    except Exception:
+        pass
+    await update.message.reply_text(
+        f"🔒 **User Locked**\n\n👤 {user.nickname} (ID: {user_id_to_lock})\n📝 Reason: {lock_reason or 'No reason'}",
+        parse_mode='Markdown',
+        reply_markup=Keyboards.admin_panel()
+    )
+    context.user_data.pop('admin_state', None)
+    context.user_data.pop('lock_user_id', None)
+
+
+async def handle_admin_unlock_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin unlock user"""
+    try:
+        user_id_to_unlock = int(update.message.text.strip())
+        admin_id = update.effective_user.id
+        with database.get_db() as db:
+            user = database.get_user(db, user_id_to_unlock)
+            if not user:
+                await update.message.reply_text("❌ User not found.")
+                context.user_data.pop('admin_state', None)
+                return
+            if not user.is_locked:
+                await update.message.reply_text(f"⚠️ User **{user.nickname}** is not locked.", parse_mode='Markdown')
+                context.user_data.pop('admin_state', None)
+                return
+            database.unlock_user(db, user_id_to_unlock, admin_id)
+        try:
+            await context.bot.send_message(
+                user_id_to_unlock,
+                "🔓 **Your account has been unlocked by an admin!**\n\nYou can now use /start to chat again.",
+                parse_mode='Markdown'
+            )
+        except Exception:
+            pass
+        await update.message.reply_text(
+            f"🔓 **User Unlocked**\n\n👤 {user.nickname} (ID: {user_id_to_unlock})",
+            parse_mode='Markdown',
+            reply_markup=Keyboards.admin_panel()
+        )
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid user ID number.")
+    finally:
+        context.user_data.pop('admin_state', None)
+
+
 async def viewonce_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /viewonce command for sending disappearing photos"""
     user_id = update.effective_user.id
@@ -2895,6 +3439,8 @@ def main() -> None:
     application.add_handler(CommandHandler("privacy", privacy_command))
     application.add_handler(CommandHandler("viewonce", viewonce_command))
     application.add_handler(CommandHandler("admin", admin_command))
+    application.add_handler(CommandHandler("referral", referral_command))
+    application.add_handler(CommandHandler("shop", shop_command))
     
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
@@ -2913,6 +3459,8 @@ def main() -> None:
             BotCommand("stop", "End current chat"),
             BotCommand("saved", "View saved chats"),
             BotCommand("profile", "View/edit your profile"),
+            BotCommand("referral", "Get your referral link and points"),
+            BotCommand("shop", "Visit the gift pack shop"),
             BotCommand("viewonce", "Send a view-once disappearing photo"),
             BotCommand("help", "Show help menu"),
             BotCommand("privacy", "Privacy information"),

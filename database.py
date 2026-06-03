@@ -1,8 +1,9 @@
 import os
+import hashlib
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Set
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, BigInteger, Float, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -60,9 +61,17 @@ class User(Base):
     ban_date = Column(DateTime, nullable=True)
     banned_by = Column(BigInteger, nullable=True)  # Admin user_id who banned
     is_muted = Column(Boolean, default=False)
-    muted_by = Column(BigInteger, nullable=True)  # Admin user_id who muted
+    muted_by = Column(BigInteger, nullable=True)
     is_silent_banned = Column(Boolean, default=False)
     silent_banned_by = Column(BigInteger, nullable=True)
+    is_locked = Column(Boolean, default=False)
+    lock_reason = Column(Text, nullable=True)
+    lock_date = Column(DateTime, nullable=True)
+    locked_by = Column(BigInteger, nullable=True)
+    unlock_points = Column(Float, default=0.0)
+    points = Column(Float, default=0.0)
+    referral_code = Column(String(16), nullable=True, unique=True)
+    referred_by = Column(BigInteger, nullable=True)
 
 class Interest(Base):
     __tablename__ = 'interests'
@@ -137,6 +146,17 @@ class SavedChat(Base):
     owner = relationship("User", foreign_keys=[owner_id])
     partner = relationship("User", foreign_keys=[partner_id])
 
+
+class GiftPackPurchase(Base):
+    __tablename__ = 'gift_pack_purchases'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False)
+    pack_id = Column(String(50), nullable=False)
+    purchased_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+
 @contextmanager
 def get_db():
     """Database session context manager"""
@@ -176,6 +196,14 @@ def init_database():
                 ("muted_by", "BIGINT"),
                 ("is_silent_banned", "BOOLEAN DEFAULT FALSE"),
                 ("silent_banned_by", "BIGINT"),
+                ("is_locked", "BOOLEAN DEFAULT FALSE"),
+                ("lock_reason", "TEXT"),
+                ("lock_date", "TIMESTAMP"),
+                ("locked_by", "BIGINT"),
+                ("unlock_points", "FLOAT DEFAULT 0.0"),
+                ("points", "FLOAT DEFAULT 0.0"),
+                ("referral_code", "VARCHAR(16)"),
+                ("referred_by", "BIGINT"),
             ]
             
             for col_name, col_type in missing_columns:
@@ -740,3 +768,109 @@ def delete_saved_chat(db, owner_id: int, partner_id: int) -> bool:
     )
     result = db.execute(delete_query, {'owner_id': owner_id, 'partner_id': partner_id})
     return result.rowcount > 0
+
+
+# ─── Referral & Points ───────────────────────────────────────────────────────
+
+def generate_referral_code(user_id: int) -> str:
+    return hashlib.sha256(f"ref-{user_id}".encode()).hexdigest()[:8].upper()
+
+def ensure_referral_code(db, user_id: int) -> str:
+    user = get_user(db, user_id)
+    if not user:
+        return ""
+    if not user.referral_code:
+        code = generate_referral_code(user_id)
+        user.referral_code = code
+        db.flush()
+    return user.referral_code
+
+def get_user_by_referral_code(db, code: str) -> Optional['User']:
+    return db.query(User).filter(User.referral_code == code.upper()).first()
+
+def add_points(db, user_id: int, amount: float) -> float:
+    user = get_user(db, user_id)
+    if user:
+        user.points = (user.points or 0.0) + amount
+        db.flush()
+        return user.points
+    return 0.0
+
+def add_unlock_points(db, user_id: int, amount: float):
+    """Add unlock points to a locked user. Returns (new_unlock_pts, auto_unlocked)."""
+    user = get_user(db, user_id)
+    if not user or not user.is_locked:
+        return (0.0, False)
+    user.unlock_points = (user.unlock_points or 0.0) + amount
+    db.flush()
+    if user.unlock_points >= 5.0:
+        user.is_locked = False
+        user.lock_reason = None
+        user.lock_date = None
+        user.locked_by = None
+        user.unlock_points = 0.0
+        db.flush()
+        return (5.0, True)
+    return (user.unlock_points, False)
+
+
+# ─── Lock / Unlock ────────────────────────────────────────────────────────────
+
+def lock_user(db, user_id: int, admin_id: int, reason: Optional[str] = None):
+    user = get_user(db, user_id)
+    if user:
+        user.is_locked = True
+        user.lock_reason = reason
+        user.lock_date = datetime.utcnow()
+        user.locked_by = admin_id
+        user.unlock_points = 0.0
+        admin_action = AdminAction(
+            admin_id=admin_id, action_type='lock',
+            target_user_id=user_id, reason=reason
+        )
+        db.add(admin_action)
+        db.flush()
+
+def unlock_user(db, user_id: int, admin_id: int):
+    user = get_user(db, user_id)
+    if user:
+        user.is_locked = False
+        user.lock_reason = None
+        user.lock_date = None
+        user.locked_by = None
+        user.unlock_points = 0.0
+        admin_action = AdminAction(
+            admin_id=admin_id, action_type='unlock',
+            target_user_id=user_id
+        )
+        db.add(admin_action)
+        db.flush()
+
+def get_locked_users(db):
+    return db.query(User).filter(User.is_locked == True).order_by(User.lock_date.desc()).all()
+
+
+# ─── Gift Packs ───────────────────────────────────────────────────────────────
+
+def has_purchased_pack(db, user_id: int, pack_id: str) -> bool:
+    return db.query(GiftPackPurchase).filter(
+        GiftPackPurchase.user_id == user_id,
+        GiftPackPurchase.pack_id == pack_id
+    ).first() is not None
+
+def get_user_purchased_packs(db, user_id: int) -> List[str]:
+    purchases = db.query(GiftPackPurchase).filter(
+        GiftPackPurchase.user_id == user_id
+    ).all()
+    return [p.pack_id for p in purchases]
+
+def purchase_gift_pack(db, user_id: int, pack_id: str, cost: float) -> bool:
+    user = get_user(db, user_id)
+    if not user or (user.points or 0.0) < cost:
+        return False
+    if has_purchased_pack(db, user_id, pack_id):
+        return False
+    user.points = (user.points or 0.0) - cost
+    db.add(GiftPackPurchase(user_id=user_id, pack_id=pack_id))
+    db.flush()
+    return True

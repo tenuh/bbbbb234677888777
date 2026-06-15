@@ -115,7 +115,7 @@ Choose your preferred language:""",
         'BACK': "🔙 Back",
         'CANCEL': "❌ Cancel",
         'ALREADY_IN_CHAT': "❌ You're already in a chat! Use the buttons below to manage your session.",
-        'ALREADY_WAITING': "⏳ You're already in the matching queue. Please wait...",
+        'ALREADY_WAITING': "⏳ You're already in the matching queue. Please wait...join our News Channel @Randomchat_lk",
         'GENDER_SET': """✅ **Profile Created!**
 
 🎭 **Nickname:** {}
@@ -129,7 +129,7 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
         'PARTNER_SKIPPED': "💔 Your partner found someone new. Let's find you a new partner!",
         'REPORT_SENT': "✅ Report submitted successfully. We'll review this. The chat has been ended.",
         'REPORT_ONLY_IN_CHAT': "⚠️ You can only report users during an active chat.",
-        'MATCHING_STARTED': "🔍 **Searching for a chat partner...**\n\nWe're looking for someone to chat with. Use the buttons below to control your search.",
+        'MATCHING_STARTED': "🔍 **Searching for a chat partner...**\n\nWe're looking for someone to chat with. Use the buttons below to control your search.\njoin our News Channel @Randomchat_lk",
         'PARTNER_FOUND': "🎉 **Connected with {}!** \n\nStart chatting now. Be respectful and have fun!join our News Channel @Randomchat_lk",
         'NO_PARTNER_FOUND': "😔 **No chat partner found right now.**\n\nThere might not be anyone available at the moment. Try refreshing or check back later!",
         'SEARCH_STOPPED': "⏹️ **Search stopped.**\n\nYou can start a new search anytime using the menu below.",
@@ -164,7 +164,7 @@ join our News Channel @Randomchat_lk
         'BACK': "🔙 ආපසු",
         'CANCEL': "❌ අවලංගු කරන්න",
         'ALREADY_IN_CHAT': "❌ ඔබ දැනටමත් චැට් එකක සිටී! ඔබේ සැසිය කළමනාකරණය කිරීමට පහත බොත්තම් භාවිතා කරන්න.",
-        'ALREADY_WAITING': "⏳ ඔබ දැනටමත් පෙළගැස්මේ සිටී. කරුණාකර රැඳී සිටින්න...",
+        'ALREADY_WAITING': "⏳ ඔබ දැනටමත් පෙළගැස්මේ සිටී. කරුණාකර රැඳී සිටින්න...join our News Channel @Randomchat_lk",
         'GENDER_SET': """✅ **පැතිකඩ සාදන ලදී!**
 
 🎭 **අන්වර්ථ නාමය:** {}
@@ -179,7 +179,7 @@ join our News Channel @Randomchat_lk
         'REPORT_SENT': "✅ වාර්තාව සාර්ථකව ඉදිරිපත් කරන ලදී. අපි මෙය සමාලෝචනය කරන්නෙමු. චැට් එක අවසන් කර ඇත.",
         'REPORT_ONLY_IN_CHAT': "⚠️ ඔබට ක්‍රියාකාරී චැට් එකක් තුළ පමණක් පරිශීලකයින් වාර්තා කළ හැක.",
         'MATCHING_STARTED': "🔍 **චැට් සහකරුවෙකු සොයමින්...**\n\nඅපි චැට් කිරීමට යමෙකු සොයමින් සිටිමු. ඔබේ සෙවුම පාලනය කිරීමට පහත බොත්තම් භාවිතා කරන්න.",
-        'PARTNER_FOUND': "🎉 **{} සමඟ සම්බන්ධ විය!** \n\nදැන් චැට් කිරීම ආරම්භ කරන්න. ගෞරවාන්විතව සිට විනෝද වන්න!",
+        'PARTNER_FOUND': "🎉 **{} සමඟ සම්බන්ධ විය!** \n\nදැන් චැට් කිරීම ආරම්භ කරන්න. ගෞරවාන්විතව සිට විනෝද වන්න!\njoin our News Channel @Randomchat_lk",
         'NO_PARTNER_FOUND': "😔 **මේ මොහොතේ චැට් සහකරුවෙකු හමු නොවීය.**\n\nදැන් කිසිවෙකු නොතිබිය හැක. නැවුම් කිරීමට උත්සාහ කරන්න හෝ පසුව නැවත පරීක්ෂා කරන්න!",
         'SEARCH_STOPPED': "⏹️ **සෙවීම නතර විය.**\n\nඔබට ඕනෑම වේලාවක පහත මෙනුව භාවිතයෙන් නව සෙවීමක් ආරම්භ කළ හැක.",
         'PROFILE_UPDATED': "✅ පැතිකඩ සාර්ථකව යාවත්කාලීන කරන ලදී!",
@@ -234,7 +234,7 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
     REPORT_SENT = "✅ Report submitted successfully. We'll review this. The chat has been ended."
     REPORT_ONLY_IN_CHAT = "⚠️ You can only report users during an active chat."
     
-    MATCHING_STARTED = "🔍 **Searching for a chat partner...**\n\nWe're looking for someone to chat with. Use the buttons below to control your search."
+    MATCHING_STARTED = "🔍 **Searching for a chat partner...**\n\nWe're looking for someone to chat with. Use the buttons below to control your search.\njoin our News Channel @Randomchat_lk"
     PARTNER_FOUND = "🎉 **Connected with {}!** \n\nStart chatting now. Be respectful and have fun!"
     
     NO_PARTNER_FOUND = "😔 **No chat partner found right now.**\n\nThere might not be anyone available at the moment. Try refreshing or check back later!"

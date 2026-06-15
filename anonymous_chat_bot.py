@@ -91,7 +91,7 @@ ADMIN_BROADCAST_MESSAGE, ADMIN_BAN_USER, ADMIN_UNBAN_USER = range(3)
 TRANSLATIONS = {
     'en': {
         'WELCOME': """🎭 **Welcome to Anonymous Chat Bot!**
-
+join our News Channel @Randomchat_lk
 Connect with people around the world anonymously and safely.
 
 Choose your gender to get started:""",
@@ -122,15 +122,15 @@ Choose your preferred language:""",
 👤 **Gender:** {}
 
 Your profile is ready! Use the menu below to start chatting or customize your profile further.""",
-        'CHAT_ENDED': "💬 Chat session ended. Use /start or the menu to begin a new chat!",
-        'CHAT_ENDED_BY_PARTNER': "😔 Your chat partner ended the session.",
+        'CHAT_ENDED': "💬 Chat session ended. Use /start or the menu to begin a new chat!join our News Channel @Randomchat_lk",
+        'CHAT_ENDED_BY_PARTNER': "😔 Your chat partner ended the session.join our News Channel @Randomchat_lk",
         'NOT_IN_CHAT': "❌ You're not in a chat session. Use /start to begin!",
         'SKIPPED_CHAT': "⏭️ Searching for a new chat partner...",
         'PARTNER_SKIPPED': "💔 Your partner found someone new. Let's find you a new partner!",
         'REPORT_SENT': "✅ Report submitted successfully. We'll review this. The chat has been ended.",
         'REPORT_ONLY_IN_CHAT': "⚠️ You can only report users during an active chat.",
         'MATCHING_STARTED': "🔍 **Searching for a chat partner...**\n\nWe're looking for someone to chat with. Use the buttons below to control your search.",
-        'PARTNER_FOUND': "🎉 **Connected with {}!** \n\nStart chatting now. Be respectful and have fun!",
+        'PARTNER_FOUND': "🎉 **Connected with {}!** \n\nStart chatting now. Be respectful and have fun!join our News Channel @Randomchat_lk",
         'NO_PARTNER_FOUND': "😔 **No chat partner found right now.**\n\nThere might not be anyone available at the moment. Try refreshing or check back later!",
         'SEARCH_STOPPED': "⏹️ **Search stopped.**\n\nYou can start a new search anytime using the menu below.",
         'PROFILE_UPDATED': "✅ Profile updated successfully!",
@@ -140,7 +140,7 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
     },
     'si': {
         'WELCOME': """🎭 **නිර්නාමික චැට් බොට් වෙත සාදරයෙන් පිළිගනිමු!**
-
+join our News Channel @Randomchat_lk
 ලොව පුරා සිටින අය සමඟ නිර්නාමිකව සහ ආරක්ෂිතව සම්බන්ධ වන්න.
 
 ආරම්භ කිරීමට ඔබේ ස්ත්‍රී පුරුෂ භාවය තෝරන්න:""",
@@ -207,7 +207,7 @@ class Messages:
     WELCOME = """🎭 **Welcome to Anonymous Chat Bot!**
 
 Connect with people around the world anonymously and safely.
-
+join our News Channel @Randomchat_lk
 Choose your gender to get started:"""
     
     PROFILE_CREATION = """📋 **Create Your Profile**
@@ -224,8 +224,8 @@ Let's set up your profile for better matching and conversations."""
 
 Your profile is ready! Use the menu below to start chatting or customize your profile further."""
     
-    CHAT_ENDED = "💬 Chat session ended. Use /start or the menu to begin a new chat!"
-    CHAT_ENDED_BY_PARTNER = "😔 Your chat partner ended the session."
+    CHAT_ENDED = "💬 Chat session ended. Use /start or the menu to begin a new chat!join our News Channel @Randomchat_lk"
+    CHAT_ENDED_BY_PARTNER = "😔 Your chat partner ended the session.join our News Channel @Randomchat_lk"
     NOT_IN_CHAT = "❌ You're not in a chat session. Use /start to begin!"
     
     SKIPPED_CHAT = "⏭️ Searching for a new chat partner..."
@@ -240,7 +240,7 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
     NO_PARTNER_FOUND = "😔 **No chat partner found right now.**\n\nThere might not be anyone available at the moment. Try refreshing or check back later!"
     SEARCH_STOPPED = "⏹️ **Search stopped.**\n\nYou can start a new search anytime using the menu below."
     
-    PROFILE_UPDATED = "✅ Profile updated successfully!"
+    PROFILE_UPDATED = "✅ Profile updated successfully!join our News Channel @Randomchat_lk"
     PROFILE_INFO = """👤 **Your Profile**
 
 🎭 **Nickname:** {nickname}

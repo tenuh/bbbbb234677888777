@@ -91,7 +91,7 @@ ADMIN_BROADCAST_MESSAGE, ADMIN_BAN_USER, ADMIN_UNBAN_USER = range(3)
 TRANSLATIONS = {
     'en': {
         'WELCOME': """🎭 **Welcome to Anonymous Chat Bot!**
-join our News Channel @Randomchat_lk
+
 Connect with people around the world anonymously and safely.
 
 Choose your gender to get started:""",
@@ -140,7 +140,7 @@ Your profile is ready! Use the menu below to start chatting or customize your pr
     },
     'si': {
         'WELCOME': """🎭 **නිර්නාමික චැට් බොට් වෙත සාදරයෙන් පිළිගනිමු!**
-join our News Channel @Randomchat_lk
+
 ලොව පුරා සිටින අය සමඟ නිර්නාමිකව සහ ආරක්ෂිතව සම්බන්ධ වන්න.
 
 ආරම්භ කිරීමට ඔබේ ස්ත්‍රී පුරුෂ භාවය තෝරන්න:""",
@@ -207,7 +207,7 @@ class Messages:
     WELCOME = """🎭 **Welcome to Anonymous Chat Bot!**
 
 Connect with people around the world anonymously and safely.
-join our News Channel @Randomchat_lk
+
 Choose your gender to get started:"""
     
     PROFILE_CREATION = """📋 **Create Your Profile**

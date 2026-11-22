@@ -743,6 +743,13 @@ class MatchmakingService:
 # Global service instance
 matchmaking = MatchmakingService()
 
+# In-memory ban set for the rules enforced while a bot process is running.
+banned_users: Set[int] = set()
+
+# Tracks a partner-side copy for each successfully forwarded original.
+# Key: (sender_id, original_message_id), Value: partner-side forwarded_message_id.
+forwarded_message_map: Dict[tuple, int] = {}
+
 # Nicknames for users
 NICKNAMES = [
     'Phoenix', 'Shadow', 'Storm', 'Raven', 'Wolf', 'Tiger', 'Lion', 'Eagle', 'Bear', 'Fox',
@@ -839,45 +846,24 @@ def get_bot_from_callback(query, context: Optional[ContextTypes.DEFAULT_TYPE] = 
         return query.message.get_bot()
     return None
     
-USERNAME_PATTERN = re.compile(r'@\w+')
-PHONE_PATTERN = re.compile(r'(@)')
-async def block_personal_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
+USERNAME_PATTERN = re.compile(r'(?<![A-Za-z0-9_])@[A-Za-z0-9_]{2,32}(?![A-Za-z0-9_])', re.IGNORECASE)
+TELEGRAM_LINK_PATTERN = re.compile(
+    r'(?i)(?:(?:https?://)?(?:t\.me|telegram\.me)/[^\s]+|tg://(?:resolve|join)\?[^\s]+)'
+)
 
-    text = update.message.text
 
-    if USERNAME_PATTERN.search(text) or PHONE_PATTERN.search(text):
-        user_id = update.effective_user.id
-        partner_id = matchmaking.get_partner(user_id)
+def shares_personal_info(text: str) -> bool:
+    """Detect Telegram usernames, Telegram links, or phone numbers with 9+ digits."""
+    if not text:
+        return False
+    if USERNAME_PATTERN.search(text) or TELEGRAM_LINK_PATTERN.search(text):
+        return True
 
-        try:
-            await update.message.delete()
-        except Exception as delete_error:
-            logger.debug(f"Failed to delete username-sharing message: {delete_error}")
-
-        context.user_data['personal_info_blocked'] = True
-
-        with database.get_db() as db:
-            database.ban_user(
-                db,
-                user_id,
-                ADMIN_ID,
-                "Username sharing is prohibited"
-            )
-
-        await matchmaking.remove_from_queue(user_id)
-        if partner_id:
-            await matchmaking.end_chat(user_id)
-            try:
-                await context.bot.send_message(
-                    partner_id,
-                    "💬 Chat ended because your partner was banned for sharing a username.",
-                    reply_markup=Keyboards.main_menu()
-                )
-            except Exception as notify_error:
-                logger.debug(f"Failed to notify partner after username ban: {notify_error}")
-        return
+    # Ignore punctuation; count the digits in each candidate number.
+    for candidate in re.findall(r'(?<!\d)[+\d][\d\s().-]{7,}\d(?!\d)', text):
+        if sum(char.isdigit() for char in candidate) >= 9:
+            return True
+    return False
 
 
 async def handle_screenshot_attempt(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -890,6 +876,12 @@ async def handle_screenshot_attempt(update: Update, context: ContextTypes.DEFAUL
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command — also processes referral and unlock deep links"""
     user_id = update.effective_user.id
+
+    # Always check the in-memory ban set before any new chat/pairing is allowed.
+    if user_id in banned_users:
+        await update.message.reply_text("You are banned")
+        return
+
     telegram_user = update.effective_user
     bot_username = (await context.bot.get_me()).username
 
@@ -944,10 +936,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if user.is_silent_banned:
                 return
             if user.is_banned:
-                await update.message.reply_text(
-                    f"❌ **Account Suspended**\n\nYour account has been suspended.\n**Reason:** {user.ban_reason or 'Policy violation'}\n\nContact support if you believe this is an error.",
-                    parse_mode='Markdown'
-                )
+                banned_users.add(user_id)
+                await update.message.reply_text("You are banned")
                 return
             if user.is_locked:
                 ref_code = database.ensure_referral_code(db, user_id)
@@ -2273,8 +2263,8 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
     
     elif data == 'admin_list_banned':
         with database.get_db() as db:
-            banned_users = database.get_banned_users(db)
-            if not banned_users:
+            db_banned_users = database.get_banned_users(db)
+            if not db_banned_users:
                 await query.edit_message_text(
                     "📋 **Banned Users**\n\n✅ No banned users.",
                     parse_mode='Markdown'
@@ -2282,14 +2272,14 @@ async def handle_admin_callback(query, context: ContextTypes.DEFAULT_TYPE) -> No
                 return
             
             banned_text = "📋 **Banned Users**\n\n"
-            for user in banned_users[:15]:  # Show max 15
+            for user in db_banned_users[:15]:  # Show max 15
                 banned_text += f"**{user.nickname}** (ID: {user.user_id})\n"
                 banned_text += f"📝 Reason: {user.ban_reason or 'No reason'}\n"
                 ban_date = user.ban_date.strftime('%Y-%m-%d') if user.ban_date else 'Unknown'
                 banned_text += f"📅 Banned: {ban_date}\n\n"
             
-            if len(banned_users) > 15:
-                banned_text += f"... and {len(banned_users) - 15} more"
+            if len(db_banned_users) > 15:
+                banned_text += f"... and {len(db_banned_users) - 15} more"
             
             await query.edit_message_text(banned_text, parse_mode='Markdown')
     
@@ -2308,8 +2298,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     user_id = update.effective_user.id
-
-    if context.user_data.pop('personal_info_blocked', False):
+    if user_id in banned_users:
+        await update.message.reply_text("You are banned")
         return
 
     # Universal silent ban guard — block everything, no response
@@ -2365,6 +2355,64 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     partner_id = matchmaking.get_partner(user_id)
 
     if partner_id:
+        # Detect personal information before forwarding anything to the partner.
+        if shares_personal_info(message_text):
+            original_message_id = update.message.message_id
+
+            # Delete the original message from the sender's chat.
+            try:
+                await context.bot.delete_message(
+                    chat_id=user_id,
+                    message_id=original_message_id
+                )
+            except Exception as delete_error:
+                logger.debug(f"Failed to delete original message {original_message_id}: {delete_error}")
+
+            # Delete the already-forwarded copy, if this original was previously mapped.
+            forwarded_message_id = forwarded_message_map.get((user_id, original_message_id))
+            if forwarded_message_id is not None:
+                try:
+                    await context.bot.delete_message(
+                        chat_id=partner_id,
+                        message_id=forwarded_message_id
+                    )
+                except Exception as delete_error:
+                    logger.debug(
+                        f"Failed to delete forwarded copy {forwarded_message_id}: {delete_error}"
+                    )
+
+            # End the chat and enforce the ban.
+            banned_users.add(user_id)
+            await matchmaking.remove_from_queue(user_id)
+            await matchmaking.end_chat(user_id)
+
+            with database.get_db() as db:
+                database.ban_user(
+                    db,
+                    user_id,
+                    ADMIN_ID,
+                    "Username or phone number sharing is prohibited"
+                )
+
+            try:
+                await context.bot.send_message(
+                    partner_id,
+                    "Other user broke rules, chat ended."
+                )
+            except Exception as warning_error:
+                logger.debug(f"Failed to warn partner after rule violation: {warning_error}")
+
+            try:
+                await context.bot.send_message(
+                    user_id,
+                    "You are banned for sharing username."
+                )
+            except Exception as sender_error:
+                logger.debug(f"Failed to send ban notice to sender: {sender_error}")
+
+            forwarded_message_map.pop((user_id, original_message_id), None)
+            return
+
         if user_id in matchmaking.waiting_users:
             matchmaking.waiting_users.discard(user_id)
 
@@ -2379,11 +2427,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text(Messages.WARNING_MESSAGE, parse_mode='Markdown')
         
         try:
-            await context.bot.send_message(
+            sent_message = await context.bot.send_message(
                 partner_id, 
                 message_text,
                 protect_content=True  # Prevent screenshots and forwarding
             )
+            forwarded_message_map[(user_id, update.message.message_id)] = sent_message.message_id
             
             # Update activity
             with database.get_db() as db:
@@ -2694,6 +2743,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     protect_content=True,
                     has_spoiler=True  # Makes photo blurred until clicked
                 )
+                forwarded_message_map[(user_id, update.message.message_id)] = sent_message.message_id
                 
                 # Schedule deletion of the view-once photo after 30 seconds
                 async def delete_view_once_photo():
@@ -2726,12 +2776,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if partner_id and matchmaking.get_partner(user_id) == partner_id:
             try:
                 # Forward protected photo to partner
-                await context.bot.send_photo(
+                sent_message = await context.bot.send_photo(
                     partner_id,
                     update.message.photo[-1].file_id,
                     caption="📷 Your chat partner sent you a photo!",
                     protect_content=True  # Prevent screenshots and forwarding
                 )
+                forwarded_message_map[(user_id, update.message.message_id)] = sent_message.message_id
                 
                 await update.message.reply_text(
                     "✅ Photo sent to your partner! (Protected from screenshots)",
@@ -2753,12 +2804,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if partner_id:
             try:
                 # Send normal photo to partner
-                await context.bot.send_photo(
+                sent_message = await context.bot.send_photo(
                     partner_id,
                     update.message.photo[-1].file_id,
                     caption="📷 Your chat partner sent you a photo!",
                     protect_content=True  # Prevent screenshots and forwarding
                 )
+                forwarded_message_map[(user_id, update.message.message_id)] = sent_message.message_id
                 
                 await update.message.reply_text(
                     "✅ Photo sent to your partner! (Protected from screenshots)",
@@ -2785,12 +2837,13 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     if partner_id:
         try:
-            await context.bot.send_video(
+            sent_message = await context.bot.send_video(
                 partner_id,
                 update.message.video.file_id,
                 caption="🎬 Your chat partner sent you a video!",
                 protect_content=True
             )
+            forwarded_message_map[(user_id, update.message.message_id)] = sent_message.message_id
         except TelegramError as e:
             logger.error(f"Failed to forward video: {e}")
             await update.message.reply_text("❌ Failed to send video. Your partner may have left.")
@@ -2816,12 +2869,13 @@ async def handle_video_document(update: Update, context: ContextTypes.DEFAULT_TY
 
     if partner_id:
         try:
-            await context.bot.send_document(
+            sent_message = await context.bot.send_document(
                 partner_id,
                 update.message.document.file_id,
                 caption="🎬 Your chat partner sent you an MP4 video file!",
                 protect_content=True
             )
+            forwarded_message_map[(user_id, update.message.message_id)] = sent_message.message_id
         except TelegramError as e:
             logger.error(f"Failed to forward MP4 document: {e}")
             await update.message.reply_text("❌ Failed to send MP4. Your partner may have left.")
@@ -2842,11 +2896,12 @@ async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     partner_id = matchmaking.get_partner(user_id)
     if partner_id:
         try:
-            await context.bot.send_sticker(
+            sent_message = await context.bot.send_sticker(
                 partner_id,
                 update.message.sticker.file_id,
                 protect_content=True
             )
+            forwarded_message_map[(user_id, update.message.message_id)] = sent_message.message_id
         except TelegramError as e:
             logger.error(f"Failed to forward sticker: {e}")
             await update.message.reply_text("❌ Failed to send sticker. Your partner may have left.")
@@ -3138,7 +3193,6 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.VIDEO, handle_video))
     application.add_handler(MessageHandler(filters.Document.MimeType("video/mp4"), handle_video_document))
     application.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, block_personal_info),group=0)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),group=1)
     
     # Set bot commands

@@ -1,4 +1,4 @@
-python-telegram-bot[job-queue]==20.7
+python-telegram-bot[job-queue]==21.8
 psycopg2-binary==2.9.10
 python-dotenv==1.1.1
 sqlalchemy==2.0.43

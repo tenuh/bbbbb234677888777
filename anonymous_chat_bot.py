@@ -848,10 +848,35 @@ async def block_personal_info(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text
 
     if USERNAME_PATTERN.search(text) or PHONE_PATTERN.search(text):
+        user_id = update.effective_user.id
+        partner_id = matchmaking.get_partner(user_id)
+
         try:
             await update.message.delete()
-        except:
-            pass
+        except Exception as delete_error:
+            logger.debug(f"Failed to delete username-sharing message: {delete_error}")
+
+        context.user_data['personal_info_blocked'] = True
+
+        with database.get_db() as db:
+            database.ban_user(
+                db,
+                user_id,
+                ADMIN_ID,
+                "Username sharing is prohibited"
+            )
+
+        await matchmaking.remove_from_queue(user_id)
+        if partner_id:
+            await matchmaking.end_chat(user_id)
+            try:
+                await context.bot.send_message(
+                    partner_id,
+                    "💬 Chat ended because your partner was banned for sharing a username.",
+                    reply_markup=Keyboards.main_menu()
+                )
+            except Exception as notify_error:
+                logger.debug(f"Failed to notify partner after username ban: {notify_error}")
         return
 
 
@@ -2283,6 +2308,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     user_id = update.effective_user.id
+
+    if context.user_data.pop('personal_info_blocked', False):
+        return
 
     # Universal silent ban guard — block everything, no response
     if is_user_silent_banned(user_id):

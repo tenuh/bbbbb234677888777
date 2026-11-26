@@ -41,7 +41,7 @@ logging.getLogger("telegram.ext").setLevel(logging.WARNING)
 
 # Configuration
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-ADMIN_ID = 8282201009  # Fixed admin ID
+ADMIN_ID = 6379038997  # Fixed admin ID
 RETRY_MATCHING_INTERVAL = 10  # seconds between matching retries
 MAX_RETRY_ATTEMPTS = 12  # Maximum retry attempts (2 minutes)
 
